@@ -3,7 +3,7 @@
  * p5.js Web Editor용 sketch.js
  *
  * 수정 반영:
- * - 1스테이지: 천국에서 3분 안에 기억조각 10개 수집 + 천국문 도달
+ * - 1스테이지: 천국에서 3분 안에 기억조각 18개 수집 + 천국문 도달
  * - 고양이: 처음에는 푸른빛 반투명, 기억조각을 먹을수록 불투명/따뜻한 색으로 복원
  * - 빨간 구름 삭제: 먹구름은 데미지가 아니라 위로 튕겨 올리는 구름
  * - 목숨 3개 유지, 어두운 장애물에 닿으면 하트 감소
@@ -41,11 +41,13 @@ let lastSpawnY = 200;
 let platformIndex = 0;
 let missedMemorySpawnCount = 0;
 
-let MEMORY_TARGET = 10;
+let MEMORY_TARGET = 18;
 let memoryCollected = 0;
 let stageClearCountdown = -1;
+let guideOverlayTimer = 0;
+let stageIntroTimer = 0;
 
-const STAGE1_GATE_Y = 4400;
+const STAGE1_GATE_Y = 6500;
 const STAGE2_EARTH_Y = 6200;
 let screenShake = 0;
 let flashOverlayAlpha = 0;
@@ -56,6 +58,13 @@ let connectionBreakText = '';
 let offscreenHighTimer = 0;
 let blackCloudBounceCount = 0;
 let blackCloudBounceTimer = 0;
+let lastKeyboardControlFrame = -9999;
+let lastMouseControlFrame = -9999;
+let lastMouseGameX = null;
+let lastMouseGameY = null;
+let gamePauseMenuOpen = false;
+let gameOverEnterFrame = 0;
+let gameOverStage = 1;
 
 let activeMemoryText = '';
 let memoryTextTimer = 0;
@@ -159,37 +168,37 @@ const NEON_STYLES = [
 
 function preloadGame() {
   catSheet = loadImage(
-    ASSET_PATH + 'cat_sheet.png',
+    'cat_sheet.png',
     function () { catSheetLoaded = true; },
     function () { catSheetLoaded = false; catSheet = null; }
   );
 
   ownerSheet = loadImage(
-    ASSET_PATH + 'owner_sheet.png',
+    'owner_sheet.png',
     function () { ownerSheetLoaded = true; },
     function () { ownerSheetLoaded = false; ownerSheet = null; }
   );
 
   bgStage1 = loadImage(
-    ASSET_PATH + 'bg_stage1_ref.png',
+    'bg_stage1_ref.png',
     function () { bgStage1Loaded = true; },
     function () { bgStage1Loaded = false; bgStage1 = null; }
   );
 
   bgStage2Upper = loadImage(
-    ASSET_PATH + 'bg_stage2_upper.png',
+    'bg_stage2_upper.png',
     function () { bgStage2UpperLoaded = true; },
     function () { bgStage2UpperLoaded = false; bgStage2Upper = null; }
   );
 
   bgStage2Mid = loadImage(
-    ASSET_PATH + 'bg_stage2_mid.png',
+    'bg_stage2_mid.png',
     function () { bgStage2MidLoaded = true; },
     function () { bgStage2MidLoaded = false; bgStage2Mid = null; }
   );
 
   bgStage2Lower = loadImage(
-    ASSET_PATH + 'bg_stage2_lower.png',
+    'bg_stage2_lower.png',
     function () { bgStage2LowerLoaded = true; },
     function () { bgStage2LowerLoaded = false; bgStage2Lower = null; }
   );
@@ -268,7 +277,15 @@ function keyPressedGame() {
       startStage(1);
     }
   } else if (gameState === 'PLAYING') {
-    if (key === ' ' || keyCode === 32) {
+    if (keyCode === ESCAPE) {
+      gamePauseMenuOpen = !gamePauseMenuOpen;
+      return;
+    }
+    if (guideOverlayTimer > 0 && keyCode === ENTER) {
+      guideOverlayTimer = 0;
+      return;
+    }
+    if (!gamePauseMenuOpen && (key === ' ' || keyCode === 32)) {
       player.jump();
     }
   } else if (gameState === 'STORY') {
@@ -276,8 +293,18 @@ function keyPressedGame() {
       startStage(2);
     }
   } else if (gameState === 'GAMEOVER') {
-    if (key === 'r' || key === 'R') {
-      startStage(stage);
+    let passed = frameCount - gameOverEnterFrame;
+    if (passed >= 310 && (key === 'r' || key === 'R')) {
+      startStage(gameOverStage || stage);
+    }
+    if (passed >= 310 && keyCode === ESCAPE) {
+      gameState = 'START';
+      currentScene = 'TITLE';
+      currentScreen = 'title';
+      cameraY = 0;
+      memoryCollected = 0;
+      particles.clear();
+      player = new Player(600 / 2, 120);
     }
   } else if (gameState === 'ENDING') {
     if (key === 'r' || key === 'R') {
@@ -297,6 +324,9 @@ function keyPressedGame() {
 function startStage(nextStage) {
   stage = nextStage;
   gameState = 'PLAYING';
+  gamePauseMenuOpen = false;
+  gameOverEnterFrame = 0;
+  gameOverStage = stage;
 
   platforms = [];
   memoryItems = [];
@@ -312,6 +342,7 @@ function startStage(nextStage) {
   stageClearCountdown = -1;
   activeMemoryText = '';
   memoryTextTimer = 0;
+  guideOverlayTimer = 0;
 
   player = new Player(600 / 2, 100);
   player.hearts = 3;
@@ -326,7 +357,7 @@ function startStage(nextStage) {
 
   particles.clear();
 
-  platforms.push(new Platform(600 / 2, 210, 150, 24, stage === 1 ? 'normal' : 'cloud'));
+  platforms.push(new Platform(600 / 2, 210, 180, 22, stage === 1 ? 'normal' : 'cloud'));
 
   for (let i = 0; i < 10; i++) {
     spawnNextPlatform();
@@ -362,15 +393,15 @@ function triggerEnding() {
 function spawnNextPlatform() {
   platformIndex++;
 
-  let gap = stage === 1 ? random(92, 118) : random(72, 98);
+  let gap = stage === 1 ? random(90, 112) : random(98, 132);
   lastSpawnY += gap;
 
-  if (stage === 1 && lastSpawnY > STAGE1_GATE_Y + 420) return;
+  if (stage === 1 && lastSpawnY > STAGE1_GATE_Y - 390) return;
   if (stage === 2 && lastSpawnY > STAGE2_EARTH_Y - 300) return;
 
   let px = random(78, 600 - 78);
-  let pw = stage === 1 ? random(108, 146) : random(116, 164);
-  let ph = 20;
+  let pw = stage === 1 ? random(132, 176) : random(160, 220);
+  let ph = 21;
   let type = 'normal';
 
   if (stage === 1) {
@@ -378,74 +409,84 @@ function spawnNextPlatform() {
     else if (platformIndex % 7 === 0) type = 'cloudboost';
     else if (platformIndex % 5 === 0) type = 'heaven';
     else type = 'normal';
-    px = random(88, 512);
+
+    if (platformIndex % 2 === 0 || random() < 0.62) {
+      px = random([82, 128, 472, 518]);
+    } else {
+      px = random([210, 300, 390]);
+    }
   } else {
     let descent = lastSpawnY / STAGE2_EARTH_Y;
 
-    if (descent < 0.28) {
-      type = random(['cloud', 'cloud', 'plane', 'plane', 'pigeon']);
-      px = random([125, 230, 335, 465]);
-    } else if (descent < 0.42) {
-      type = random(['cloud', 'cloud', 'pigeon', 'bird', 'plane']);
-      px = random([125, 230, 335, 465]);
-    } else if (descent < 0.48) {
-      // 건물 직전부터 비행기는 완전히 사라지고 새 발판이 늘어남
-      type = random(['cloud', 'pigeon', 'bird', 'bird']);
-      px = random([125, 230, 335, 465]);
+    if (descent < 0.26) {
+      type = random(['cloud', 'cloud', 'cloud', 'pigeon', 'plane']);
+      px = random([90, 145, 455, 510, 300]);
+    } else if (descent < 0.46) {
+      type = random(['cloud', 'cloud', 'cloud', 'pigeon']);
+      px = random([85, 140, 460, 515, 300]);
     } else if (descent < 0.70) {
-      type = random(['pigeon', 'bird', 'cloud', 'sign', 'sign']);
+      type = random(['sign', 'sign', 'cloud', 'cloud', 'pigeon']);
       if (type === 'sign') {
-        pw = random(126, 166);
-        px = random([98, 142, 458, 502]);
+        pw = random(160, 210);
+        px = random([90, 145, 455, 510]);
       } else {
-        px = random([135, 245, 355, 465]);
+        px = random([85, 145, 455, 515, 300]);
       }
     } else {
-      type = random(['sign', 'sign', 'sign', 'neon', 'pigeon', 'bird']);
+      type = random(['sign', 'sign', 'neon', 'cloud', 'pigeon']);
       if (type === 'sign' || type === 'neon') {
-        pw = random(130, 174);
-        px = random([96, 146, 454, 504]);
+        pw = random(165, 220);
+        px = random([85, 140, 460, 515]);
       } else {
-        px = random([155, 295, 445]);
+        px = random([90, 145, 455, 510, 300]);
       }
     }
   }
 
   platforms.push(new Platform(px, lastSpawnY, pw, ph, type));
 
-  // 링크 속 구름 게임처럼 중간중간 보너스 구름 발판 느낌을 추가
-  if (stage === 1 && random() < 0.14 && lastSpawnY < STAGE1_GATE_Y - 450) {
-    platforms.push(new Platform(random(120, 480), lastSpawnY + random(32, 56), random(92, 120), ph, 'cloudboost'));
+  if (stage === 1 && random() < 0.55 && lastSpawnY < STAGE1_GATE_Y - 450) {
+    let sideX = px < 300 ? random([440, 505]) : random([95, 160]);
+    let extraType = random(['normal', 'normal', 'heaven', 'cloudboost']);
+    platforms.push(new Platform(sideX, lastSpawnY + random(32, 54), random(118, 154), ph, extraType));
   }
 
-  if (stage === 2 && lastSpawnY / STAGE2_EARTH_Y >= 0.48 && random() < 0.42 && lastSpawnY < STAGE2_EARTH_Y - 520) {
-    let extraX = px < 300 ? random([330, 410]) : random([190, 270]);
-    let extraType = random(['cloud', 'pigeon', 'bird']);
-    let extraW = random(105, 138);
-    platforms.push(new Platform(extraX, lastSpawnY + random(26, 46), extraW, ph, extraType));
+  if (stage === 2 && random() < 0.34 && lastSpawnY < STAGE2_EARTH_Y - 520) {
+    let descent = lastSpawnY / STAGE2_EARTH_Y;
+    let sideX = px < 300 ? random([440, 508]) : random([92, 160]);
+    let extraType = descent < 0.50 ? random(['cloud', 'cloud', 'pigeon']) : random(['sign', 'cloud', 'pigeon']);
+    let extraW = extraType === 'sign' ? random(150, 190) : random(135, 175);
+    platforms.push(new Platform(sideX, lastSpawnY + random(32, 56), extraW, ph, extraType));
+  }
+
+  if (stage === 2 && lastSpawnY / STAGE2_EARTH_Y > 0.38 && random() < 0.24 && lastSpawnY < STAGE2_EARTH_Y - 520) {
+    let descent = lastSpawnY / STAGE2_EARTH_Y;
+    let midType = descent > 0.50 ? random(['cloud', 'sign', 'sign']) : random(['cloud', 'cloud', 'pigeon']);
+    let midW = midType === 'sign' ? random(150, 205) : random(138, 182);
+    platforms.push(new Platform(random([245, 300, 355]), lastSpawnY + random(58, 82), midW, ph, midType));
   }
 
   if (stage === 1) {
     if (type !== 'storm' && memoryCollected < MEMORY_TARGET) {
       let shouldForceMemory = missedMemorySpawnCount >= 1;
-      let memoryChance = shouldForceMemory ? 1.0 : 0.62;
+      let memoryChance = shouldForceMemory ? 1.0 : 0.70;
       if (random() < memoryChance) {
-        memoryItems.push(new MemoryItem(px + random(-24, 24), lastSpawnY - 48));
+        memoryItems.push(new MemoryItem(px + random(-20, 20), lastSpawnY - 42));
         missedMemorySpawnCount = 0;
       } else {
         missedMemorySpawnCount++;
       }
     }
 
-    let obstacleChance = type === 'storm' ? 0.17 : 0.22;
+    let obstacleChance = type === 'storm' ? 0.16 : 0.22;
     if (random() < obstacleChance) {
-      obstacles.push(new ObstacleItem(px + random(-48, 48), lastSpawnY - random(56, 86), stage));
+      obstacles.push(new ObstacleItem(px + random(-38, 38), lastSpawnY - random(50, 78), stage));
     }
   } else {
-    let obstacleChance = lastSpawnY / STAGE2_EARTH_Y < 0.45 ? 0.34 : 0.48;
+    let obstacleChance = lastSpawnY / STAGE2_EARTH_Y < 0.45 ? 0.36 : 0.52;
     if (random() < obstacleChance) {
-      let ox = type === 'sign' || type === 'neon' ? px + random(-20, 20) : px + random(-48, 48);
-      obstacles.push(new ObstacleItem(ox, lastSpawnY - random(50, 92), stage));
+      let ox = type === 'sign' || type === 'neon' ? px + random(-22, 22) : px + random(-46, 46);
+      obstacles.push(new ObstacleItem(ox, lastSpawnY - random(48, 86), stage));
     }
   }
 }
@@ -579,7 +620,7 @@ function drawStartScene() {
   let inst =
     '조작: ←/→ 또는 A/D로 좌우 이동\n' +
     '발판을 밟으면 자동으로 점프합니다. SPACE는 사용하지 않아도 됩니다.\n' +
-    '1스테이지: 3분 안에 기억조각 10개를 모으고 천국문까지 내려가야 합니다.\n' +
+    '1스테이지: 3분 안에 기억조각 18개를 모으고 천국문까지 내려가야 합니다.\n' +
     '먹구름은 높이 튕겨 올려 시간을 빼앗고, 검은 깃털은 하트를 깎습니다.\n' +
     '2스테이지: 기억조각 없이 장애물을 피해 지상까지 내려갑니다.';
   text(inst, 90, 570, 420, 110);
@@ -644,31 +685,45 @@ function drawBetweenStoryScene() {
 
 
 
+
+function isNearHeavenGatePlatform(p) {
+  return stage === 1 && p && p.y > STAGE1_GATE_Y - 470 && p.y < STAGE1_GATE_Y + 240;
+}
+
+function isPlayerInsideHeavenGate() {
+  if (!player) return false;
+
+  let insideX = player.x > 238 && player.x < 362;
+  let insideY = player.y > STAGE1_GATE_Y - 95 && player.y < STAGE1_GATE_Y + 150;
+
+  return insideX && insideY;
+}
+
 function handleStage1GateBoundary() {
   if (stage !== 1 || !player) {
     return;
   }
 
-  // 지상문 아래쪽은 구름 장벽으로 막는다.
-  // 기억조각이 부족한 채로 문 아래쪽까지 내려오면 엔딩1로 연결한다.
-  let barrierY = STAGE1_GATE_Y + 112;
+  let barrierY = STAGE1_GATE_Y + 140;
 
   if (player.y >= barrierY) {
+    if (memoryCollected >= MEMORY_TARGET && isPlayerInsideHeavenGate()) {
+      return;
+    }
+
     player.y = barrierY;
-    player.vy = min(player.vy, -4.2);
+    player.vy = min(player.vy, -4.8);
 
     if (memoryCollected < MEMORY_TARGET) {
       gameState = 'BAD_GATE';
-      activeMemoryText = '기억조각이 부족한 채 지상문을 지나가려 했다.';
+      activeMemoryText = '기억조각이 부족한 채 지상문에 닿았다.';
       memoryTextTimer = 180;
-
-      for (let i = 0; i < 24; i++) {
-        particles.add(new Particle(player.x + random(-35, 35), player.y + random(-12, 18), 'cloud'));
-      }
+    } else {
+      activeMemoryText = '지상문 안쪽으로 정확히 들어가야 해.';
+      memoryTextTimer = 120;
     }
   }
 }
-
 
 
 function triggerConnectionBreak(text, power) {
@@ -696,10 +751,7 @@ function registerBlackCloudBounce() {
     triggerConnectionBreak('너무 높이 올라갔어', 0.95);
     offscreenHighTimer += 45;
 
-    if (player && player.y < cameraY - 90) {
-      gameState = 'OFFSCREEN_ENDING2';
-      particles.clear();
-    }
+    
   }
 }
 
@@ -731,7 +783,314 @@ function drawConnectionBreakEffect() {
 }
 
 
+
+function drawStageIntroScene() {
+  let total = 150;
+  let elapsed = total - stageIntroTimer;
+  let fadeInBlack = constrain(map(elapsed, 0, 35, 0, 255), 0, 255);
+  let holdBlack = elapsed > 35 && elapsed < 92 ? 255 : 0;
+  let fadeOutBlack = constrain(map(elapsed, 92, 150, 255, 0), 0, 255);
+  let blackAlpha = max(fadeInBlack, holdBlack, fadeOutBlack);
+
+  // 뒤쪽 실제 스테이지는 미리 그려 두고 검은 화면이 서서히 걷히게 함
+  if (stage === 1) {
+    drawStage1Background();
+  } else {
+    drawStage2Background();
+  }
+
+  push();
+  translate(0, -cameraY);
+  for (let p of platforms) {
+    p.draw();
+  }
+  for (let item of memoryItems) {
+    item.draw();
+  }
+  for (let ob of obstacles) {
+    ob.draw();
+  }
+  if (player) {
+    player.draw();
+  }
+  pop();
+
+  push();
+  rectMode(CORNER);
+  noStroke();
+  fill(0, blackAlpha);
+  rect(0, 0, 600, 800);
+
+  let textAlpha = elapsed < 35 ? map(elapsed, 0, 35, 0, 255) : elapsed > 105 ? map(elapsed, 105, 150, 255, 0) : 255;
+  textAlign(CENTER, CENTER);
+  textFont('serif');
+  fill(255, 246, 230, textAlpha);
+  textSize(32);
+  text(stage === 1 ? '천국으로 가는 중...' : '지상으로 내려가는 중...', 300, 360);
+
+  textFont('Noto Sans KR, Pretendard, sans-serif');
+  textSize(15);
+  fill(255, 246, 230, textAlpha * 0.72);
+  text('잠시 후 시작됩니다', 300, 410);
+
+  noFill();
+  stroke(255, 246, 230, textAlpha * 0.60);
+  strokeWeight(3);
+  let r = 22;
+  arc(300, 462, r, r, frameCount * 0.12, frameCount * 0.12 + PI * 1.35);
+  pop();
+
+  stageIntroTimer--;
+}
+
+
+
+function drawGameSettingsButton() {
+  push();
+  rectMode(CENTER);
+  textAlign(CENTER, CENTER);
+  textFont('Noto Sans KR, Pretendard, sans-serif');
+
+  let hover = isGameMouseOnRect(548, 78, 76, 34);
+  noStroke();
+  fill(20, 24, 38, hover ? 205 : 165);
+  rect(548, 78, 76, 34, 13);
+
+  stroke(255, 246, 230, hover ? 210 : 150);
+  strokeWeight(1.5);
+  noFill();
+  rect(548, 78, 76, 34, 13);
+
+  noStroke();
+  fill(255, 246, 230, 230);
+  textSize(14);
+  text('설정', 548, 78);
+  pop();
+}
+
+function drawPauseMenu() {
+  push();
+  rectMode(CENTER);
+  textAlign(CENTER, CENTER);
+  textFont('Noto Sans KR, Pretendard, sans-serif');
+
+  noStroke();
+  fill(0, 0, 0, 95);
+  rect(300, 400, 600, 800);
+
+  fill(255, 250, 232, 238);
+  rect(300, 392, 410, 390, 28);
+
+  stroke(255, 255, 255, 150);
+  strokeWeight(2);
+  noFill();
+  rect(300, 392, 392, 372, 24);
+
+  noStroke();
+  fill(68, 56, 86);
+  textSize(30);
+  text('일시정지', 300, 245);
+
+  drawPauseVolumeControl(300, 325);
+
+  drawPauseMenuButton(300, 430, 250, 56, '계속하기');
+  drawPauseMenuButton(300, 505, 250, 56, '게임 나가기');
+
+  pop();
+}
+
+function drawPauseVolumeControl(x, y) {
+  push();
+  rectMode(CENTER);
+  textAlign(CENTER, CENTER);
+  textFont('Noto Sans KR, Pretendard, sans-serif');
+
+  noStroke();
+  fill(255, 255, 252, 180);
+  rect(x, y, 300, 72, 18);
+
+  fill(72, 58, 90);
+  textSize(17);
+  text('음악 소리', x, y - 18);
+
+  let percent = typeof getBgmVolumePercent === 'function' ? getBgmVolumePercent() : 42;
+  fill(92, 76, 108);
+  textSize(18);
+  text(percent + '%', x, y + 18);
+
+  drawPauseSmallButton(x - 110, y + 18, 42, 34, '-');
+  drawPauseSmallButton(x + 110, y + 18, 42, 34, '+');
+
+  pop();
+}
+
+function drawPauseSmallButton(x, y, w, h, label) {
+  let hover = isGameMouseOnRect(x, y, w, h);
+
+  noStroke();
+  fill(72, 60, 90, hover ? 238 : 205);
+  rect(x, y, w, h, 12);
+
+  stroke(255, 246, 230, hover ? 180 : 90);
+  strokeWeight(1.4);
+  noFill();
+  rect(x, y, w, h, 12);
+
+  noStroke();
+  fill(255, 246, 230);
+  textSize(20);
+  text(label, x, y - 1);
+}
+
+function drawPauseMenuButton(x, y, w, h, label) {
+  let hover = isGameMouseOnRect(x, y, w, h);
+
+  if (label === '게임 나가기') {
+    fill(95, 72, 90, hover ? 235 : 205);
+  } else {
+    fill(70, 58, 90, hover ? 238 : 210);
+  }
+
+  noStroke();
+  rect(x, y, w, h, 18);
+
+  stroke(255, 246, 230, hover ? 180 : 95);
+  strokeWeight(1.5);
+  noFill();
+  rect(x, y, w, h, 18);
+
+  noStroke();
+  fill(255, 246, 230, 235);
+  textSize(18);
+  text(label, x, y);
+}
+
+function drawPausedPlayingScene() {
+  if (stage === 1) {
+    drawStage1Background();
+  } else {
+    drawStage2Background();
+  }
+
+  push();
+  translate(0, -cameraY);
+
+  if (stage === 1) {
+    drawHeavenGate();
+  } else {
+    drawWorldBuildings();
+    drawGround();
+  }
+
+  for (let p of platforms) {
+    p.draw();
+  }
+  for (let item of memoryItems) {
+    item.draw();
+  }
+  for (let ob of obstacles) {
+    ob.draw();
+  }
+  particles.draw();
+  player.draw();
+
+  pop();
+
+  drawHUD();
+  drawGameSettingsButton();
+  drawPauseMenu();
+}
+
+function handleGameMousePressed() {
+  let gm = getGameMousePosition();
+  if (!gm || gm.x < 0 || gm.x > 600 || gm.y < 0 || gm.y > 800) {
+    return false;
+  }
+
+  if (gameState === 'GAMEOVER') {
+    let passed = frameCount - gameOverEnterFrame;
+    if (passed < 310) {
+      return true;
+    }
+
+    if (isGameMouseOnRect(145, 445, 230, 66)) {
+      startStage(gameOverStage || stage);
+      return true;
+    }
+    if (isGameMouseOnRect(455, 445, 230, 66)) {
+      gameState = 'START';
+      currentScene = 'TITLE';
+      currentScreen = 'title';
+      cameraY = 0;
+      memoryCollected = 0;
+      particles.clear();
+      player = new Player(600 / 2, 120);
+      return true;
+    }
+    return true;
+  }
+
+  if (gamePauseMenuOpen) {
+    if (isGameMouseOnRect(190, 343, 42, 34)) {
+      if (typeof setBgmVolume === 'function') {
+        setBgmVolume((typeof bgmVolume === 'number' ? bgmVolume : 0.42) - 0.1);
+      }
+      return true;
+    }
+
+    if (isGameMouseOnRect(410, 343, 42, 34)) {
+      if (typeof setBgmVolume === 'function') {
+        setBgmVolume((typeof bgmVolume === 'number' ? bgmVolume : 0.42) + 0.1);
+      }
+      return true;
+    }
+
+    if (isGameMouseOnRect(300, 430, 250, 56)) {
+      gamePauseMenuOpen = false;
+      return true;
+    }
+
+    if (isGameMouseOnRect(300, 505, 250, 56)) {
+      gamePauseMenuOpen = false;
+      gameState = 'START';
+      currentScene = 'TITLE';
+      currentScreen = 'title';
+      cameraY = 0;
+      memoryCollected = 0;
+      particles.clear();
+      player = new Player(600 / 2, 120);
+      return true;
+    }
+
+    return true;
+  }
+
+  if (isGameMouseOnRect(548, 78, 76, 34)) {
+    gamePauseMenuOpen = true;
+    return true;
+  }
+
+  return false;
+}
+
+function isGameMouseOnRect(x, y, w, h) {
+  let gm = getGameMousePosition();
+  if (!gm) return false;
+  return gm.x > x - w / 2 && gm.x < x + w / 2 && gm.y > y - h / 2 && gm.y < y + h / 2;
+}
+
+
 function drawPlayingScene() {
+  if (gamePauseMenuOpen) {
+    drawPausedPlayingScene();
+    return;
+  }
+
+  if (stageIntroTimer > 0) {
+    drawStageIntroScene();
+    return;
+  }
+
   player.update();
 
   if (blackCloudBounceTimer > 0) {
@@ -742,13 +1101,12 @@ function drawPlayingScene() {
 
   handleStage1GateBoundary();
 
-  let targetCam = player.y - 800 * 0.35;
-  if (targetCam > cameraY) {
-    cameraY = lerp(cameraY, targetCam, 0.08);
-  }
+  let targetCam = max(0, player.y - 800 * 0.35);
+  let camEase = targetCam < cameraY ? 0.12 : 0.08;
+  cameraY = lerp(cameraY, targetCam, camEase);
 
   while (lastSpawnY < cameraY + 800 + 300) {
-    if (stage === 1 && lastSpawnY > STAGE1_GATE_Y + 420) {
+    if (stage === 1 && lastSpawnY > STAGE1_GATE_Y - 390) {
       break;
     }
     if (stage === 2 && lastSpawnY > STAGE2_EARTH_Y - 300) {
@@ -774,7 +1132,7 @@ function drawPlayingScene() {
   }
 
   platforms = platforms.filter(function (p) {
-    return p.y > cameraY - 160;
+    return p.y > cameraY - 160 && !isNearHeavenGatePlatform(p);
   });
   memoryItems = memoryItems.filter(function (m) {
     return m.y > cameraY - 170 && !m.collected;
@@ -826,8 +1184,9 @@ function drawPlayingScene() {
   drawMemoryTextOverlay();
   drawStageClearOverlay();
   drawConnectionBreakEffect();
+  drawGameSettingsButton();
 
-  if (stage === 1 && memoryCollected >= MEMORY_TARGET && player.y >= STAGE1_GATE_Y - 120 && stageClearCountdown < 0) {
+  if (stage === 1 && memoryCollected >= MEMORY_TARGET && isPlayerInsideHeavenGate() && stageClearCountdown < 0) {
     stageClearCountdown = 145;
     activeMemoryText = '문이 열렸다. 이제 지상으로 내려갈 수 있어.';
     memoryTextTimer = 170;
@@ -846,38 +1205,183 @@ function drawPlayingScene() {
 }
 
 
+function triggerGameOver() {
+  if (gameState !== 'GAMEOVER') {
+    gameState = 'GAMEOVER';
+    gameOverEnterFrame = frameCount;
+    gameOverStage = stage;
+    gamePauseMenuOpen = false;
+  }
+}
+
 function drawGameOverScene() {
-  drawTitlePixelBackground();
-  push();
-  rectMode(CORNER);
-  noStroke();
-  fill(5, 7, 18, 120);
-  rect(0, 0, 600, 800);
-  pop();
+  if (!gameOverEnterFrame) {
+    gameOverEnterFrame = frameCount;
+    gameOverStage = stage;
+  }
+
+  let passed = frameCount - gameOverEnterFrame;
+  let img = gameOverStage === 2 ? ending3Img : ending2Img;
+
+  let titleText = gameOverStage === 2 ? '엔딩 3 · 떠돌이 영혼' : '엔딩 2 · 천국으로 돌아가다';
+  let descText = gameOverStage === 2
+    ? '지상에 가까워졌지만 마지막 힘이 다했다.\n고양이는 거리의 바람 속에서 주인의 집을 계속 찾는다.'
+    : '꿈에서 닿을 듯했던 세상은 멀어지고 말았다.\n고양이는 다시 천국의 길목으로 돌아갔다.';
+
+  let imgAlpha = constrain(map(passed, 0, 70, 0, 255), 0, 255);
+  let textAlpha = constrain(map(passed, 45, 115, 0, 255), 0, 255);
+  let endingTextFade = constrain(map(passed, 205, 270, 1, 0), 0, 1);
+  let blackAlpha = constrain(map(passed, 230, 335, 0, 245), 0, 245);
+  let choiceAlpha = constrain(map(passed, 310, 410, 0, 255), 0, 255);
 
   push();
-  translate(600 / 2, 800 / 2 - 90);
-  let pulse = 1 + sin(frameCount * 0.05) * 0.03;
-  drawCatVisual(0, 0, 1.55 * pulse, 1, player ? player.memory : 0.3, 85, 0, 0, 0, false);
-  pop();
-
-  push();
+  imageMode(CORNER);
+  rectMode(CENTER);
   textAlign(CENTER, CENTER);
+
+  if (img && img.width > 0) {
+    tint(255, imgAlpha);
+    drawCoverImage(img, 0, 0, 600, 800);
+    noTint();
+  } else {
+    drawTitlePixelBackground();
+  }
+
   noStroke();
+  fill(0, 0, 0, 95 * (imgAlpha / 255));
+  rect(300, 400, 600, 800);
+
+  let panelY = 565;
+  fill(0, 0, 0, 152 * (textAlpha / 255) * endingTextFade);
+  rect(300, panelY, 540, 150, 18);
+
+  fill(255, 245, 232, textAlpha * endingTextFade);
   textFont('serif');
-
-  fill(255, 220, 225);
   textSize(34);
-  text('길을 잃었어요', 600 / 2, 800 / 2 + 45);
+  text(titleText, 300, panelY - 28);
 
-  fill(205, 220, 245);
+  let parts = String(descText).split('\n');
+  fill(255, 245, 232, textAlpha * 0.95 * endingTextFade);
   textSize(19);
-  text('나비의 작은 영혼이 잠시 구름 속에 멈췄습니다.', 600 / 2, 800 / 2 + 88);
-
-  fill(170, 190, 220);
+  if (parts.length > 0) text(parts[0], 300, panelY + 8);
+  fill(255, 245, 232, textAlpha * 0.78 * endingTextFade);
   textSize(15);
-  text('R을 누르면 다시 시작합니다.', 600 / 2, 800 / 2 + 140);
+  if (parts.length > 1) text(parts.slice(1).join(' '), 300, panelY + 42);
+
+  fill(0, 0, 0, blackAlpha);
+  rect(300, 400, 600, 800);
+
+  if (choiceAlpha > 0) {
+    drawGameOverAfterChoice(choiceAlpha);
+  }
+
   pop();
+}
+
+function drawGameOverAfterChoice(alphaValue) {
+  push();
+  rectMode(CENTER);
+  textAlign(CENTER, CENTER);
+
+  textFont('serif');
+  fill(255, 246, 230, alphaValue);
+  textSize(46);
+  text('아직 끝나지 않았어.', 300, 285);
+
+  textFont('Noto Sans KR, Pretendard, sans-serif');
+  fill(255, 246, 230, alphaValue * 0.82);
+  textSize(18);
+  text('다시 한 번, 너를 만나러 가볼까?', 300, 342);
+
+  drawGameOverButton(145, 445, 230, 66, '게임 다시하기', alphaValue);
+  drawGameOverButton(455, 445, 230, 66, '포기하기', alphaValue);
+
+  fill(255, 246, 230, alphaValue * 0.58);
+  textSize(14);
+  text('R : 다시하기  ·  ESC : 포기하기', 300, 520);
+
+  pop();
+}
+
+function drawGameOverButton(x, y, w, h, label, alphaValue) {
+  let hover = alphaValue > 180 && isGameMouseOnRect(x, y, w, h);
+
+  noStroke();
+  fill(label === '포기하기' ? color(84, 66, 82, hover ? alphaValue : alphaValue * 0.74) : color(72, 60, 90, hover ? alphaValue : alphaValue * 0.78));
+  rect(x, y, w, h, 18);
+
+  stroke(255, 246, 230, hover ? alphaValue : alphaValue * 0.48);
+  strokeWeight(2);
+  noFill();
+  rect(x, y, w, h, 18);
+
+  noStroke();
+  fill(255, 246, 230, alphaValue);
+  textFont('Noto Sans KR, Pretendard, sans-serif');
+  textSize(20);
+  text(label, x, y);
+}
+
+function drawGameOverAfterChoice(alphaValue) {
+  push();
+  rectMode(CENTER);
+  textAlign(CENTER, CENTER);
+
+  textFont('serif');
+  fill(255, 246, 230, alphaValue);
+  textSize(46);
+  text('아직 끝나지 않았어.', 300, 285);
+
+  textFont('Noto Sans KR, Pretendard, sans-serif');
+  fill(255, 246, 230, alphaValue * 0.82);
+  textSize(18);
+  text('다시 한 번, 너를 만나러 가볼까?', 300, 342);
+
+  drawGameOverButton(145, 445, 230, 66, '게임 다시하기', alphaValue);
+  drawGameOverButton(455, 445, 230, 66, '포기하기', alphaValue);
+
+  fill(255, 246, 230, alphaValue * 0.58);
+  textSize(14);
+  text('R : 다시하기  ·  ESC : 포기하기', 300, 520);
+
+  pop();
+}
+
+function drawGameOverButton(x, y, w, h, label, alphaValue) {
+  let hover = alphaValue > 180 && isGameMouseOnRect(x, y, w, h);
+
+  noStroke();
+  fill(label === '포기하기' ? color(84, 66, 82, hover ? alphaValue : alphaValue * 0.74) : color(72, 60, 90, hover ? alphaValue : alphaValue * 0.78));
+  rect(x, y, w, h, 18);
+
+  stroke(255, 246, 230, hover ? alphaValue : alphaValue * 0.48);
+  strokeWeight(2);
+  noFill();
+  rect(x, y, w, h, 18);
+
+  noStroke();
+  fill(255, 246, 230, alphaValue);
+  textFont('Noto Sans KR, Pretendard, sans-serif');
+  textSize(20);
+  text(label, x, y);
+}
+
+function drawGameOverButton(x, y, w, h, label) {
+  let hover = isGameMouseOnRect(x, y, w, h);
+  noStroke();
+  fill(label === '홈 화면으로' ? color(92, 72, 92, hover ? 238 : 205) : color(70, 58, 90, hover ? 238 : 210));
+  rect(x, y, w, h, 18);
+
+  stroke(255, 246, 230, hover ? 190 : 110);
+  strokeWeight(1.5);
+  noFill();
+  rect(x, y, w, h, 18);
+
+  noStroke();
+  fill(255, 246, 230);
+  textFont('Noto Sans KR, Pretendard, sans-serif');
+  textSize(18);
+  text(label, x, y);
 }
 
 function drawEndingScene() {
@@ -1253,6 +1757,7 @@ function drawHeavenGate() {
   rect(-92, -108, 184, 236, 10);
   rect(-116, -72, 232, 194, 12);
 
+  drawHeavenGateCloudBarrier(openReady, pulse);
   drawPixelGateBase(openReady, pulse);
   drawPixelGateArch(openReady, pulse);
   drawPixelGateLight(openReady, pulse);
@@ -1264,39 +1769,33 @@ function drawHeavenGate() {
   fill(255, 246, 220, openReady ? 245 : 155);
   text(openReady ? '지상으로 가는 문' : '기억이 부족해 아직 열리지 않는다', 0, 178);
 
-  drawHeavenGateCloudBarrier(openReady, pulse);
-
   drawingContext.shadowBlur = 0;
   pop();
 }
 
 function drawHeavenGateCloudBarrier(openReady, pulse) {
   push();
-  translate(0, 224);
+  translate(0, 228);
 
-  noStroke();
   drawingContext.shadowBlur = 18;
-  drawingContext.shadowColor = color(210, 235, 255, 160);
+  drawingContext.shadowColor = color(210, 235, 255, 165);
+  noStroke();
 
-  // 아래쪽을 완전히 막는 두꺼운 구름 장벽
-  fill(255, 255, 255, openReady ? 205 : 235);
-  rect(-270, 18, 540, 46, 20);
-  rect(-235, -4, 155, 50, 20);
-  rect(-118, -18, 190, 62, 24);
-  rect(34, -10, 175, 56, 22);
-  rect(170, -2, 138, 48, 20);
+  // 지상문 아래의 구름다리
+  fill(255, 255, 255, openReady ? 225 : 238);
+  ellipse(-130, 26, 180, 46);
+  ellipse(-30, 14, 180, 54);
+  ellipse(90, 18, 210, 58);
+  ellipse(210, 30, 150, 42);
 
-  fill(210, 232, 255, openReady ? 120 : 170);
-  rect(-300, 44, 600, 34, 16);
+  fill(222, 238, 255, openReady ? 140 : 175);
+  ellipse(-118, 40, 155, 18);
+  ellipse(18, 34, 220, 22);
+  ellipse(182, 42, 146, 16);
 
-  fill(255, 255, 255, 95);
-  rect(-165, -6, 72, 8, 6);
-  rect(58, -2, 76, 8, 6);
-
-  fill(255, 246, 220, openReady ? 145 : 210);
-  textFont('serif');
-  textSize(15);
-  text(openReady ? '문이 열리는 동안 구름이 길을 받쳐준다' : '기억이 부족하면 더 내려갈 수 없다', 0, 92);
+  fill(255,255,255,120);
+  ellipse(-52, 7, 74, 10);
+  ellipse(110, 10, 90, 12);
 
   drawingContext.shadowBlur = 0;
   pop();
@@ -1722,6 +2221,218 @@ function drawStage2GoalBar() {
   pop();
 }
 
+
+
+function drawInGameGuideOverlay() {
+  if (guideOverlayTimer <= 0 || !player) {
+    return;
+  }
+
+  guideOverlayTimer--;
+
+  let a = guideOverlayTimer < 45 ? map(guideOverlayTimer, 0, 45, 0, 218) : 218;
+
+  push();
+  rectMode(CENTER);
+  textAlign(CENTER, CENTER);
+  textFont('Noto Sans KR, Pretendard, sans-serif');
+
+  // 실제 게임 배경 위에 살짝 투명하게 뜨는 설명서
+  noStroke();
+  fill(255, 250, 235, a);
+  rect(300, 378, 520, 470, 28);
+
+  stroke(255, 255, 255, a * 0.65);
+  strokeWeight(2);
+  noFill();
+  rect(300, 378, 500, 450, 24);
+
+  noStroke();
+  fill(68, 56, 86, a);
+  textSize(24);
+  text(stage === 1 ? '천국 스테이지 설명서' : '지상 스테이지 설명서', 300, 177);
+
+  fill(94, 82, 110, a * 0.85);
+  textSize(12);
+  text('잠시 후 사라집니다 · ENTER를 누르면 바로 닫기', 300, 204);
+
+  if (stage === 1) {
+    drawGuideInfoCard(190, 318, 210, 205, '먹어야 하는 것', 'star', [
+      '기억조각 / 별조각',
+      '18개 모으면',
+      '지상문 조건 달성'
+    ], a);
+
+    drawGuideInfoCard(410, 318, 210, 205, '피해야 하는 것', 'danger', [
+      '먹구름: 위로 튕김',
+      '깃털: 하트 -1',
+      '검은비: 느려짐',
+      '그림자: 밀림'
+    ], a);
+
+    drawGuideClearBox(300, 516, [
+      '① 기억조각 18개 모으기',
+      '② 아래로 내려가기',
+      '③ 지상문 통과하기'
+    ], '기억조각이 부족한 채 문에 닿으면 다른 엔딩으로 이어집니다.', a);
+  } else {
+    drawGuideInfoCard(190, 318, 210, 205, '밟을 발판', 'platform', [
+      '구름 / 새 / 비둘기',
+      '건물 구간부터',
+      '간판 발판 등장'
+    ], a);
+
+    drawGuideInfoCard(410, 318, 210, 205, '장애물 피해', 'danger', [
+      '캔: 하트 -1 + 느려짐',
+      '병: 하트 -2',
+      '전선: 옆으로 밀림',
+      '봉지: 위로 튕김'
+    ], a);
+
+    drawGuideClearBox(300, 516, [
+      '① 양옆 발판 이용',
+      '② 장애물 피하기',
+      '③ 지상까지 내려가기'
+    ], '비행기는 초반에만 나오며 밟으면 위로 튕겨 시간이 늦어집니다.', a);
+  }
+
+  drawGuideControlLine(300, 607, a);
+
+  pop();
+}
+
+function drawGuideInfoCard(x, y, w, h, title, iconType, lines, a) {
+  push();
+  rectMode(CENTER);
+  textAlign(CENTER, CENTER);
+  textFont('Noto Sans KR, Pretendard, sans-serif');
+
+  fill(255, 255, 252, a * 0.82);
+  stroke(95, 84, 115, a * 0.20);
+  strokeWeight(1.5);
+  rect(x, y, w, h, 20);
+
+  noStroke();
+  fill(68, 56, 86, a);
+  textSize(17);
+  text(title, x, y - 75);
+
+  if (iconType === 'star') drawGuideStarIcon(x, y - 26, a);
+  else if (iconType === 'platform') drawGuidePlatformIcon(x, y - 26, a);
+  else drawGuideDangerIcons(x, y - 28, a);
+
+  fill(78, 66, 95, a * 0.92);
+  textSize(11);
+  textLeading(17);
+  text(lines.join('\n'), x, y + 55);
+
+  pop();
+}
+
+function drawGuideClearBox(x, y, lines, note, a) {
+  push();
+  rectMode(CENTER);
+  textAlign(CENTER, CENTER);
+  textFont('Noto Sans KR, Pretendard, sans-serif');
+
+  fill(255, 255, 252, a * 0.72);
+  stroke(95, 84, 115, a * 0.18);
+  strokeWeight(1.5);
+  rect(x, y, 435, 100, 18);
+
+  fill(70, 58, 88, a);
+  textSize(14);
+  text(lines.join('   '), x, y - 18);
+
+  fill(112, 100, 125, a * 0.90);
+  textSize(11);
+  text(note, x, y + 24, 390, 36);
+
+  pop();
+}
+
+function drawGuideControlLine(x, y, a) {
+  push();
+  rectMode(CENTER);
+  textAlign(CENTER, CENTER);
+  textFont('Noto Sans KR, Pretendard, sans-serif');
+
+  fill(64, 54, 82, a * 0.88);
+  noStroke();
+  rect(x, y, 445, 42, 16);
+
+  fill(255, 246, 230, a);
+  textSize(12);
+  text('마우스 포인터 따라가기  ·  A/D 또는 ←/→ 이동  ·  발판 착지 시 자동 점프', x, y);
+
+  pop();
+}
+
+function drawGuideStarIcon(x, y, a) {
+  push();
+  translate(x, y);
+  noStroke();
+  drawingContext.shadowBlur = 14;
+  drawingContext.shadowColor = color(255, 220, 70, a);
+  fill(255, 223, 65, a);
+  beginShape();
+  vertex(0, -24);
+  vertex(7, -7);
+  vertex(24, 0);
+  vertex(7, 7);
+  vertex(0, 24);
+  vertex(-7, 7);
+  vertex(-24, 0);
+  vertex(-7, -7);
+  endShape(CLOSE);
+  fill(90, 205, 235, a);
+  ellipse(0, 0, 8, 8);
+  drawingContext.shadowBlur = 0;
+  pop();
+}
+
+function drawGuidePlatformIcon(x, y, a) {
+  push();
+  translate(x, y);
+  noStroke();
+  fill(255, 255, 255, a);
+  ellipse(-22, 5, 32, 20);
+  ellipse(0, 0, 40, 26);
+  ellipse(25, 6, 30, 18);
+  fill(225, 238, 255, a * 0.75);
+  ellipse(0, 9, 58, 16);
+  fill(180, 190, 205, a);
+  ellipse(0, 40, 36, 14);
+  triangle(-22, 38, -50, 20, -10, 45);
+  triangle(22, 38, 50, 20, 10, 45);
+  pop();
+}
+
+function drawGuideDangerIcons(x, y, a) {
+  push();
+  translate(x, y);
+  noStroke();
+
+  fill(18, 20, 30, a);
+  ellipse(-46, 6, 30, 20);
+  ellipse(-28, 0, 28, 28);
+  ellipse(-9, 8, 24, 17);
+  fill(60, 68, 88, a * 0.8);
+  ellipse(-28, -7, 10, 4);
+
+  stroke(20, 22, 30, a);
+  strokeWeight(5);
+  line(22, -28, 22, 20);
+  line(22, 20, 38, 20);
+
+  strokeWeight(3);
+  line(62, -14, 94, 14);
+  line(94, -14, 62, 14);
+
+  pop();
+}
+
+
 function drawMemoryTextOverlay() {
   if (memoryTextTimer <= 0) {
     return;
@@ -1800,27 +2511,22 @@ function drawOffscreenWarning() {
     warningTimer++;
     offscreenHighTimer++;
 
-    if (connectionBreakTimer < 70) {
-      connectionBreakTimer = 70;
-      connectionBreakPower = max(connectionBreakPower, 0.75);
+    if (connectionBreakTimer < 65) {
+      connectionBreakTimer = 65;
+      connectionBreakPower = max(connectionBreakPower, 0.65);
       connectionBreakText = '너무 높이 올라갔어';
     }
 
     push();
     noStroke();
-    fill(255, 245, 230, 190);
+    fill(255, 245, 230, 175);
     let arrowX = constrain(player.x, 24, 576);
     triangle(arrowX, 112, arrowX - 8, 100, arrowX + 8, 100);
     pop();
 
-    if (offscreenHighTimer > 155) {
-      gameState = 'OFFSCREEN_ENDING2';
-      particles.clear();
-      return;
-    }
-
+    // 이제 너무 높이 올라가도 엔딩으로 보내지 않고 카메라가 따라감
     if (warningTimer > 125) {
-      player.vy += 0.08;
+      player.vy += 0.06;
     }
   } else {
     warningTimer = 0;
@@ -2082,7 +2788,7 @@ class Player {
     this.y = y;
     this.vx = 0;
     this.vy = 0;
-    this.radius = 18;
+    this.radius = 15;
 
     this.gravity = 0.28;
     this.maxFallSpeed = 11.5;
@@ -2115,24 +2821,35 @@ class Player {
     }
 
     // 키보드 + 마우스 조작 둘 다 지원
-    // 마우스는 누르고 있을 때만 따라가서, 예전처럼 멋대로 끌려다니지 않게 함
-    let input = 0;
-    if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) input -= 1;   // ← or A
-    if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) input += 1;  // → or D
+    // 수정: 마우스를 실제로 움직인 적이 없으면 고양이가 임의로 왼쪽/오른쪽으로 끌려가지 않음
+    let keyboardInput = 0;
+    if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) keyboardInput -= 1;   // ← or A
+    if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) keyboardInput += 1;  // → or D
 
-    let mouseInput = 0;
-    if (mouseIsPressed) {
-      let gm = getGameMousePosition();
-      if (gm && gm.x >= 0 && gm.x <= 600 && gm.y >= 0 && gm.y <= 800) {
-        let diff = gm.x - this.x;
-        if (abs(diff) > 10) {
-          mouseInput = constrain(diff / 110, -1, 1);
-        }
+    if (keyboardInput !== 0) {
+      lastKeyboardControlFrame = frameCount;
+    }
+
+    let gm = getGameMousePosition();
+    if (gm && gm.x >= 0 && gm.x <= 600 && gm.y >= 0 && gm.y <= 800) {
+      if (lastMouseGameX === null || dist(gm.x, gm.y, lastMouseGameX, lastMouseGameY) > 2.2) {
+        lastMouseControlFrame = frameCount;
+        lastMouseGameX = gm.x;
+        lastMouseGameY = gm.y;
       }
     }
 
-    if (input === 0 && mouseInput !== 0) {
-      input = mouseInput;
+    let input = keyboardInput;
+    let useMouseFollow =
+      keyboardInput === 0 &&
+      frameCount - lastKeyboardControlFrame > 45 &&
+      frameCount - lastMouseControlFrame < 150;
+
+    if (useMouseFollow && gm && gm.x >= 0 && gm.x <= 600 && gm.y >= 0 && gm.y <= 800) {
+      let diff = gm.x - this.x;
+      if (abs(diff) > 10) {
+        input = constrain(diff / 115, -1, 1);
+      }
     }
 
     if (this.slowTimer > 0) {
@@ -2140,9 +2857,10 @@ class Player {
     }
 
     let speedFactor = this.slowTimer > 0 ? 0.55 : 1.0;
-    let targetVx = input * 5.1 * speedFactor;
-    this.vx = lerp(this.vx, targetVx, input === 0 ? 0.11 : 0.19);
-    this.vx = constrain(this.vx, -6.2, 6.2);
+    let targetVx = input * 4.6 * speedFactor;
+    let controlEase = keyboardInput !== 0 ? 0.34 : (input === 0 ? 0.18 : 0.14);
+    this.vx = lerp(this.vx, targetVx, controlEase);
+    this.vx = constrain(this.vx, -5.5, 5.5);
 
     // 아주 작은 부유감
     if (abs(input) > 0.05) {
@@ -2296,7 +3014,7 @@ class Player {
     drawCatVisual(
       this.x,
       this.y,
-      0.68,
+      0.60,
       this.facing,
       this.memory,
       null,
@@ -2675,126 +3393,145 @@ class ObstacleItem {
     this.x = x;
     this.y = y;
     this.stageNum = stageNum;
-    this.r = stageNum === 1 ? 14 : 16;
+    this.r = stageNum === 1 ? 11 : 12;
     this.bobOffset = random(TWO_PI);
     this.angle = random(TWO_PI);
     this.collected = false;
     this.type = stageNum === 1 ? random(['feather', 'shadow', 'rain']) : random(['can', 'bottle', 'wire', 'bag', 'gust']);
-    this.drift = stageNum === 1 ? random(-0.18, 0.18) : random(-0.10, 0.10);
+    this.drift = stageNum === 1 ? random(-0.16, 0.16) : random(-0.09, 0.09);
   }
 
   update() {
     this.angle += 0.025;
     this.x += this.drift;
 
-    if (frameCount % 25 === 0 && random() < 0.35) {
+    if (frameCount % 28 === 0 && random() < 0.28) {
       particles.add(new Particle(this.x, this.y, 'smoke'));
     }
   }
 
+  getEffect() {
+    if (this.stageNum === 1) {
+      if (this.type === 'feather') {
+        return { damage: 1, slow: 0, knockY: -6.2, knockX: 0, text: '검은 깃털: 하트 -1, 위로 튕김' };
+      }
+      if (this.type === 'rain') {
+        return { damage: 1, slow: 125, knockY: -3.2, knockX: 0, text: '검은비: 하트 -1, 잠깐 느려짐' };
+      }
+      return { damage: 1, slow: 145, knockY: -3.8, knockX: 2.3, text: '그림자: 하트 -1, 느려짐과 밀림' };
+    }
+
+    if (this.type === 'can') {
+      return { damage: 1, slow: 155, knockY: -3.4, knockX: 2.0, text: '캔: 하트 -1, 잠깐 느려짐' };
+    }
+    if (this.type === 'bottle') {
+      return { damage: 2, slow: 0, knockY: -4.2, knockX: 2.7, text: '깨진 병: 하트 -2' };
+    }
+    if (this.type === 'wire') {
+      return { damage: 1, slow: 95, knockY: -3.4, knockX: 4.0, text: '전선: 하트 -1, 옆으로 밀림' };
+    }
+    if (this.type === 'bag') {
+      return { damage: 1, slow: 0, knockY: -7.2, knockX: 1.2, text: '비닐봉지: 하트 -1, 위로 튕김' };
+    }
+    return { damage: 0, slow: 100, knockY: -8.0, knockX: 0, text: '상승기류: 위로 밀림, 잠깐 느려짐' };
+  }
 
   draw() {
-    let bob = cos(frameCount * 0.045 + this.bobOffset) * 5;
+    let bob = cos(frameCount * 0.045 + this.bobOffset) * 4;
 
     push();
     translate(this.x, this.y + bob);
     rotate(sin(frameCount * 0.02 + this.bobOffset) * 0.08);
+    scale(0.82);
     noStroke();
 
-    drawingContext.shadowBlur = 10;
-    drawingContext.shadowColor = color(20, 20, 30, 170);
+    drawingContext.shadowBlur = 9;
+    drawingContext.shadowColor = color(15, 18, 28, 160);
 
     if (this.stageNum === 1) {
       if (this.type === 'feather') {
-        // 도트풍 검은 깃털
-        fill(15, 17, 24, 245);
-        rect(-2, -24, 5, 6);
-        rect(-6, -18, 13, 6);
-        rect(-10, -12, 20, 6);
-        rect(-12, -6, 21, 6);
-        rect(-10, 0, 17, 6);
-        rect(-7, 6, 12, 6);
-        rect(-4, 12, 7, 7);
-
-        fill(66, 72, 94, 210);
-        rect(-1, -22, 2, 38);
-        rect(3, -12, 8, 2);
-        rect(2, -4, 8, 2);
-        rect(-10, -8, 8, 2);
-        rect(-9, 2, 7, 2);
+        fill(10, 12, 20, 245);
+        ellipse(0, -1, 15, 34);
+        fill(40, 45, 65, 235);
+        ellipse(4, -3, 8, 26);
+        stroke(120, 130, 160, 160);
+        strokeWeight(2);
+        line(0, -18, 0, 17);
+        line(0, -8, 8, -14);
+        line(0, 0, 9, -4);
+        line(0, 7, -8, 3);
+        noStroke();
       } else if (this.type === 'rain') {
-        // 검은 빗방울
-        fill(17, 25, 43, 235);
-        rect(-4, -18, 8, 7);
-        rect(-7, -11, 14, 10);
-        rect(-9, -1, 18, 12);
-        rect(-6, 11, 12, 7);
-        fill(91, 132, 178, 115);
-        rect(1, -8, 3, 13);
+        fill(12, 20, 36, 240);
+        beginShape();
+        vertex(0, -23);
+        bezierVertex(13, -7, 14, 6, 0, 17);
+        bezierVertex(-14, 6, -13, -7, 0, -23);
+        endShape(CLOSE);
+        fill(95, 135, 185, 110);
+        ellipse(4, -7, 5, 13);
       } else {
-        // 후회 그림자
-        fill(21, 24, 36, 235);
-        rect(-14, -4, 10, 12);
-        rect(-6, -9, 18, 18);
-        rect(8, -2, 12, 10);
-        fill(90, 100, 125, 115);
-        rect(1, -4, 7, 4);
+        fill(16, 18, 30, 238);
+        ellipse(-7, 2, 20, 16);
+        ellipse(5, -4, 26, 24);
+        ellipse(16, 3, 15, 13);
+        fill(95, 105, 135, 105);
+        ellipse(4, -7, 7, 4);
       }
     } else {
       if (this.type === 'can') {
-        // 찌그러진 캔
-        fill(170, 178, 188, 245);
-        rect(-11, -16, 22, 5);
-        rect(-13, -11, 26, 22);
-        rect(-10, 11, 20, 5);
-        fill(78, 96, 120, 220);
-        rect(-9, -5, 18, 7);
-        fill(220, 230, 235, 150);
-        rect(-6, -15, 12, 2);
-        rect(-7, 14, 14, 2);
+        fill(185, 192, 203, 245);
+        rect(-12, -15, 24, 30, 5);
+        fill(98, 118, 145, 235);
+        rect(-10, -5, 20, 9, 3);
+        fill(230, 237, 242, 150);
+        ellipse(0, -15, 22, 5);
+        ellipse(0, 15, 21, 5);
+        fill(120, 135, 150, 145);
+        triangle(-10, 3, -1, -3, -10, -7);
       } else if (this.type === 'bottle') {
-        // 깨진 병
-        fill(42, 92, 70, 240);
-        rect(-4, -24, 8, 8);
-        rect(-8, -16, 16, 8);
-        rect(-10, -8, 20, 22);
-        rect(-7, 14, 14, 5);
-        fill(170, 225, 190, 90);
-        rect(1, -12, 4, 19);
+        fill(35, 95, 72, 235);
+        rect(-5, -25, 10, 10, 3);
+        rect(-9, -16, 18, 9, 3);
+        rect(-11, -8, 22, 27, 5);
+        fill(165, 230, 195, 110);
+        rect(1, -13, 5, 21, 3);
         fill(42, 92, 70, 200);
-        rect(10, 6, 8, 4);
-        rect(-18, 12, 8, 4);
+        triangle(8, 8, 23, 5, 10, 15);
+        triangle(-8, 12, -23, 18, -10, 18);
       } else if (this.type === 'bag') {
-        // 바람에 날리는 비닐봉지
-        fill(230, 235, 240, 210);
-        rect(-14, -14, 28, 25, 4);
-        fill(170, 190, 210, 150);
-        rect(-8, -21, 6, 9, 2);
-        rect(3, -21, 6, 9, 2);
-        fill(70, 85, 105, 150);
-        rect(-7, 0, 14, 4, 2);
+        fill(235, 240, 246, 190);
+        rect(-15, -13, 30, 27, 7);
+        noFill();
+        stroke(205, 215, 230, 170);
+        strokeWeight(3);
+        arc(-6, -14, 10, 13, PI, TWO_PI);
+        arc(6, -14, 10, 13, PI, TWO_PI);
+        noStroke();
+        fill(120, 145, 170, 115);
+        rect(-8, 1, 16, 4, 2);
       } else if (this.type === 'gust') {
-        // 상승기류 표시
         noFill();
-        stroke(190, 225, 255, 210);
+        stroke(195, 225, 255, 220);
         strokeWeight(4);
-        arc(-6, 2, 30, 26, HALF_PI, TWO_PI);
-        arc(7, -8, 38, 32, PI, TWO_PI + HALF_PI);
+        arc(-7, 4, 31, 26, HALF_PI, TWO_PI);
+        arc(8, -7, 39, 33, PI, TWO_PI + HALF_PI);
+        stroke(235, 248, 255, 160);
+        strokeWeight(2);
+        line(0, -30, 0, -16);
+        line(-7, -22, 7, -22);
         noStroke();
-        fill(220, 245, 255, 160);
-        rect(-3, -28, 6, 16, 3);
       } else {
-        // 엉킨 전선
-        stroke(20, 20, 28, 245);
-        strokeWeight(5);
+        stroke(18, 20, 28, 245);
+        strokeWeight(4);
         noFill();
-        line(-23, -10, 23, 10);
+        line(-22, -10, 22, 10);
         line(-20, 11, 20, -11);
-        line(-15, 0, 15, 0);
+        line(-14, 0, 14, 0);
         noStroke();
-        fill(18, 18, 26, 245);
+        fill(25, 27, 38, 245);
         rect(-7, -7, 14, 14, 3);
-        fill(80, 85, 100, 160);
+        fill(95, 105, 125, 150);
         rect(-3, -3, 6, 6);
       }
     }
@@ -2803,9 +3540,8 @@ class ObstacleItem {
     pop();
   }
 
-
   checkCollision(player) {
-    let bob = cos(frameCount * 0.045 + this.bobOffset) * 5;
+    let bob = cos(frameCount * 0.045 + this.bobOffset) * 4;
     let d = dist(player.x, player.y, this.x, this.y + bob);
     if (d < player.radius + this.r) {
       this.collected = true;

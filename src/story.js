@@ -4,7 +4,7 @@ let middleImgs = [];
 let trueEndingImgs = [];
 let ending4Img;
 
-const ASSET_PATH = "assets/images/";
+const ASSET_PATH = "";
 
 const titleFile = "title_png.png";
 
@@ -68,6 +68,7 @@ let unlockedEndings = { ending1: false, ending2: false, ending3: false, ending4:
 let storyTextScale = 1.0;
 let defaultAutoStory = false;
 let highContrastText = false;
+let howPage = 0;
 
 const storyControlButtons = [
   { name: 'back', label: '뒤로', x: gameW - 285, y: gameH - 206, w: 92, h: 38 },
@@ -290,63 +291,444 @@ function drawButtons() {
   }
 }
 
+
+
+
+
+
+
+
+
 function drawHowToPlayScreen() {
   drawCoverImage(titleImg, 0, 0, gameW, gameH);
-
-  noStroke();
-  fill(0, 150);
-  rect(gameW / 2, gameH / 2, gameW, gameH);
-
-  fill(255, 245, 230);
-  textFont("serif");
-  textSize(58);
-  text("게임 방법", gameW / 2, 180);
-
-  textSize(27 * storyTextScale);
-  textAlign(LEFT, CENTER);
-
-  let startX = 145;
-  let y = 310;
-  let gap = 48 * storyTextScale;
-
-  fill(255, 245, 230);
-  text("조작", startX, y);
-  fill(255, 245, 230, 205);
-  text("← / → 또는 A / D : 좌우 이동", startX + 30, y + gap);
-  text("마우스 누르기 : 고양이가 마우스 방향으로 이동", startX + 30, y + gap * 2);
-  text("발판 착지 : 자동 점프", startX + 30, y + gap * 3);
-  text("R : 현재 스테이지 다시 시작", startX + 30, y + gap * 4);
-
-  y += gap * 5.4;
-  fill(255, 245, 230);
-  text("먹거나 모아야 하는 것", startX, y);
-  fill(255, 245, 230, 205);
-  text("노란 기억조각 / 별조각 : 10개를 모으면 천국문 조건 달성", startX + 30, y + gap);
-  text("하얀 구름, 비둘기, 작은 새, 간판 : 밟고 아래로 내려가는 발판", startX + 30, y + gap * 2);
-
-  y += gap * 3.4;
-  fill(255, 245, 230);
-  text("주의하거나 피해야 하는 것", startX, y);
-  fill(255, 245, 230, 205);
-  text("먹구름 : 훨씬 높게 튕겨 올라가며 지상과 멀어짐", startX + 30, y + gap);
-  text("비행기 : 초반에만 등장, 밟으면 매우 높게 튀어 지상과 멀어짐", startX + 30, y + gap * 2);
-  text("검은 깃털 / 검은 비 / 그림자 : 하트 감소, 일부는 느려짐", startX + 30, y + gap * 3);
-  text("캔 : 하트 1 감소 + 느려짐", startX + 30, y + gap * 4);
-  text("깨진 병 : 하트 2 감소", startX + 30, y + gap * 5);
-  text("전선 : 하트 1 감소 + 옆으로 밀림\n비닐봉지 : 하트 1 감소 + 위로 튕김\n작은 새 발판 : 건물 구간 이후 비행기를 대신해서 등장", startX + 30, y + gap * 6);
-
+  rectMode(CENTER);
   textAlign(CENTER, CENTER);
 
-  fill(255, 245, 220, 140);
-  stroke(255, 245, 220);
+  noStroke();
+  fill(0, 170);
+  rect(gameW / 2, gameH / 2, gameW, gameH);
+
+  textFont("serif");
+  fill(255, 245, 230);
+  textSize(56);
+  text(howPage === 0 ? "게임 방법 1 / 2" : "게임 방법 2 / 2", gameW / 2, 92);
+
+  textFont("Noto Sans KR, Pretendard, sans-serif");
+  fill(255, 245, 230, 210);
+  textSize(22);
+  text(howPage === 0 ? "천국 스테이지 설명" : "지상 스테이지 설명", gameW / 2, 145);
+
+  drawHowMainFrame();
+
+  if (howPage === 0) {
+    drawHowHeavenPage();
+  } else {
+    drawHowEarthPage();
+  }
+
+  drawHowNavButtons();
+}
+
+function drawHowMainFrame() {
+  // 큰 네모창 기준: 내부 콘텐츠가 이 박스 안에서만 정렬되도록 고정
+  noStroke();
+  fill(255, 250, 236, 244);
+  rect(gameW / 2, 735, 860, 1080, 34);
+
+  stroke(255, 255, 255, 165);
   strokeWeight(2);
-  rect(gameW / 2, 1300, 330, 70, 18);
+  noFill();
+  rect(gameW / 2, 735, 836, 1056, 28);
+}
+
+function drawHowHeavenPage() {
+  let leftX = gameW / 2 - 200;
+  let rightX = gameW / 2 + 200;
+
+  drawHowHeroCard(gameW / 2, 300, "천국 스테이지", "기억조각 / 별조각 18개를 모아\n지상문 안으로 정확히 들어가면 됩니다.", "memory");
+
+  drawHowStatusCard(leftX, 535, "화면 표시", [
+    "하트 3개 = 체력",
+    "기억 게이지 = 18개 / 100%",
+    "남은 시간 = 3분",
+    "ESC / 설정 = 일시정지"
+  ]);
+
+  drawHowSimpleCard(rightX, 535, 330, 240, "먹고 밟을 것", [
+    ["memory", "기억조각 / 별조각", "18개 모으면 문 조건 달성"],
+    ["cloud", "하얀 구름", "기본 발판"],
+    ["cloudboost", "빛나는 구름", "위로 크게 튕기는 발판"],
+    ["heaven", "천국 발판", "안정적인 발판"]
+  ]);
+
+  drawHowObstaclePanel(gameW / 2, 880, "천국 장애물", [
+    ["storm", "먹구름", "위로 튕김"],
+    ["feather", "검은 깃털", "하트 -1 / 위로 튕김"],
+    ["rain", "검은비", "하트 -1 / 느려짐"],
+    ["shadow", "그림자", "하트 -1 / 옆으로 밀림"]
+  ], 2);
+
+  drawHowKnowBox(gameW / 2, 1112, [
+    "지상문은 문 안쪽 중앙으로 정확히 들어가야 통과됩니다.",
+    "기억조각이 부족한 채 지상문에 닿으면 엔딩1입니다.",
+    "하트가 0이 되면 삽화가 나온 뒤 다시하기 / 포기하기 선택지가 나옵니다."
+  ]);
+}
+
+function drawHowEarthPage() {
+  let leftX = gameW / 2 - 200;
+  let rightX = gameW / 2 + 200;
+
+  drawHowHeroCard(gameW / 2, 300, "지상 스테이지", "먹어야 하는 아이템은 없고\n장애물을 피해 지상까지 내려가면 됩니다.", "earthset");
+
+  drawHowStatusCard(leftX, 535, "화면 표시", [
+    "하트 3개 = 체력",
+    "지상 게이지 = 내려간 거리",
+    "100% = 지상 도착",
+    "ESC / 설정 = 일시정지"
+  ]);
+
+  drawHowSimpleCard(rightX, 535, 330, 240, "밟을 발판", [
+    ["cloud", "구름", "초반 기본 발판"],
+    ["bird", "비둘기 / 작은 새", "공중 발판"],
+    ["sign", "간판", "건물 구간 주요 발판"],
+    ["plane", "비행기", "밟으면 위로 크게 튕김"]
+  ]);
+
+  drawHowObstaclePanel(gameW / 2, 880, "지상 장애물", [
+    ["can", "캔", "하트 -1 / 느려짐"],
+    ["bottle", "깨진 병", "하트 -2"],
+    ["wire", "전선", "하트 -1 / 옆으로 밀림"],
+    ["bag", "비닐봉지", "하트 -1 / 위로 튕김"],
+    ["gust", "상승기류", "위로 밀림 / 하트 감소 없음"]
+  ], 3);
+
+  drawHowKnowBox(gameW / 2, 1112, [
+    "지상에서는 기억조각을 먹지 않습니다.",
+    "건물 배경이 보이면 새와 간판 발판을 중심으로 내려가면 됩니다.",
+    "하트가 0이 되면 삽화가 나온 뒤 다시하기 / 포기하기 선택지가 나옵니다."
+  ]);
+}
+
+function drawHowHeroCard(x, y, title, desc, iconType) {
+  push();
+  rectMode(CENTER);
+  fill(255, 255, 252, 248);
+  stroke(122, 110, 138, 58);
+  strokeWeight(2);
+  rect(x, y, 740, 150, 28);
+
+  drawHowLargeIcon(iconType, x - 280, y + 6);
 
   noStroke();
-  fill(70, 55, 85);
-  textSize(32);
-  text("돌아가기", gameW / 2, 1302);
+  fill(72, 58, 90);
+  textFont("Noto Sans KR, Pretendard, sans-serif");
+  textAlign(CENTER, CENTER);
+  textSize(30);
+  text(title, x + 48, y - 28);
+
+  fill(98, 84, 116);
+  textSize(17);
+  text(desc, x + 48, y + 25);
+  pop();
 }
+
+function drawHowStatusCard(x, y, title, lines) {
+  push();
+  rectMode(CENTER);
+  textAlign(CENTER, CENTER);
+  textFont("Noto Sans KR, Pretendard, sans-serif");
+
+  fill(255, 255, 252, 247);
+  stroke(122, 110, 138, 54);
+  strokeWeight(1.7);
+  rect(x, y, 330, 240, 24);
+
+  noStroke();
+  fill(72, 58, 90);
+  textSize(23);
+  text(title, x, y - 94);
+
+  // 하트와 게이지 예시도 카드 중앙 기준으로 배치
+  drawHowMiniHeart(x - 68, y - 50);
+  drawHowMiniGauge(x + 8, y - 57, 150, 14);
+
+  fill(104, 90, 118);
+  textAlign(CENTER, CENTER);
+  textSize(13);
+  textLeading(22);
+
+  let startY = y + 4;
+  for (let i = 0; i < lines.length; i++) {
+    text(lines[i], x, startY + i * 24);
+  }
+
+  pop();
+}
+
+function drawHowSimpleCard(x, y, w, h, title, rows) {
+  push();
+  rectMode(CENTER);
+  fill(255, 255, 252, 247);
+  stroke(122, 110, 138, 54);
+  strokeWeight(1.7);
+  rect(x, y, w, h, 24);
+
+  noStroke();
+  fill(72, 58, 90);
+  textFont("Noto Sans KR, Pretendard, sans-serif");
+  textAlign(CENTER, CENTER);
+  textSize(24);
+  text(title, x, y - h / 2 + 34);
+
+  let startY = y - 54;
+  let gap = rows.length >= 4 ? 47 : 56;
+  for (let i = 0; i < rows.length; i++) {
+    let yy = startY + i * gap;
+    drawHowItemIcon(rows[i][0], x - w / 2 + 62, yy, 0.68);
+    textAlign(LEFT, CENTER);
+    fill(72, 58, 90);
+    textSize(14.5);
+    text(rows[i][1], x - w / 2 + 98, yy - 9);
+    fill(104, 90, 118);
+    textSize(11.5);
+    text(rows[i][2], x - w / 2 + 98, yy + 13);
+  }
+  pop();
+}
+
+function drawHowObstaclePanel(x, y, title, rows, cols) {
+  push();
+  rectMode(CENTER);
+  let h = cols === 3 ? 304 : 286;
+  fill(255, 255, 252, 247);
+  stroke(122, 110, 138, 54);
+  strokeWeight(1.7);
+  rect(x, y, 740, h, 24);
+
+  noStroke();
+  fill(72, 58, 90);
+  textFont("Noto Sans KR, Pretendard, sans-serif");
+  textAlign(CENTER, CENTER);
+  textSize(24);
+  text(title, x, y - h / 2 + 34);
+
+  let cardW = cols === 3 ? 210 : 315;
+  let gapX = cols === 3 ? 225 : 340;
+  let startX = x - gapX * (cols - 1) / 2;
+  let startY = y - h / 2 + 102;
+  let gapY = 88;
+
+  for (let i = 0; i < rows.length; i++) {
+    let c = i % cols;
+    let r = floor(i / cols);
+    drawHowObstacleCard(startX + c * gapX, startY + r * gapY, cardW, rows[i][0], rows[i][1], rows[i][2]);
+  }
+  pop();
+}
+
+function drawHowObstacleCard(x, y, w, type, nameText, desc) {
+  push();
+  rectMode(CENTER);
+  fill(252, 252, 249, 245);
+  stroke(122, 110, 138, 34);
+  strokeWeight(1.2);
+  rect(x, y, w, 74, 16);
+
+  drawHowItemIcon(type, x - w / 2 + 38, y, 0.68);
+
+  noStroke();
+  textFont("Noto Sans KR, Pretendard, sans-serif");
+  textAlign(LEFT, CENTER);
+  fill(72, 58, 90);
+  textSize(14.5);
+  text(nameText, x - w / 2 + 72, y - 12);
+
+  fill(104, 90, 118);
+  textSize(11);
+  text(desc, x - w / 2 + 72, y + 14);
+
+  pop();
+}
+
+function drawHowKnowBox(x, y, lines) {
+  push();
+  rectMode(CENTER);
+  noStroke();
+  fill(101, 87, 122, 225);
+  rect(x, y, 700, 102, 22);
+
+  fill(255, 246, 230, 232);
+  textFont("Noto Sans KR, Pretendard, sans-serif");
+  textAlign(CENTER, CENTER);
+  textSize(14);
+  textLeading(26);
+  text(lines.join("\n"), x, y);
+
+  pop();
+}
+
+function drawHowNavButtons() {
+  drawHowButton(gameW / 2 - 225, 1244, 190, 54, "돌아가기");
+  drawHowButton(gameW / 2 + 225, 1244, 190, 54, howPage === 0 ? "지상 보기" : "천국 보기");
+}
+
+function drawHowButton(x, y, w, h, label) {
+  let mx = screenToGameX(mouseX);
+  let my = screenToGameY(mouseY);
+  let hover = mx > x - w / 2 && mx < x + w / 2 && my > y - h / 2 && my < y + h / 2;
+
+  fill(hover ? color(88, 70, 105, 235) : color(72, 60, 90, 212));
+  stroke(255, 245, 220, hover ? 190 : 120);
+  strokeWeight(2);
+  rect(x, y, w, h, 18);
+
+  noStroke();
+  fill(255, 246, 230);
+  textFont("Noto Sans KR, Pretendard, sans-serif");
+  textSize(21);
+  textAlign(CENTER, CENTER);
+  text(label, x, y);
+}
+
+function handleHowClick() {
+  let mx = screenToGameX(mouseX);
+  let my = screenToGameY(mouseY);
+
+  if (mx > gameW / 2 - 320 && mx < gameW / 2 - 130 && my > 1217 && my < 1271) {
+    currentScreen = "title";
+    return;
+  }
+  if (mx > gameW / 2 + 130 && mx < gameW / 2 + 320 && my > 1217 && my < 1271) {
+    howPage = howPage === 0 ? 1 : 0;
+  }
+}
+
+function drawHowMiniHeart(x, y) {
+  push();
+  translate(x, y);
+  fill(238, 82, 98);
+  noStroke();
+  for (let i = 0; i < 3; i++) {
+    drawMiniHeartShape(i * 24, 0, 9);
+  }
+  pop();
+}
+
+function drawMiniHeartShape(x, y, s) {
+  beginShape();
+  vertex(x, y + s * 0.55);
+  bezierVertex(x - s * 1.1, y - s * 0.2, x - s * 0.55, y - s * 1.0, x, y - s * 0.45);
+  bezierVertex(x + s * 0.55, y - s * 1.0, x + s * 1.1, y - s * 0.2, x, y + s * 0.55);
+  endShape(CLOSE);
+}
+
+function drawHowMiniGauge(x, y, w, h) {
+  push();
+  rectMode(CORNER);
+  noStroke();
+  fill(25, 30, 48, 175);
+  rect(x, y, w, h, 8);
+  fill(100, 225, 255);
+  rect(x, y, w * 0.68, h, 8);
+  pop();
+}
+
+function drawHowLargeIcon(type, x, y) {
+  push();
+  if (type === "memory") {
+    drawHowMemoryIcon(x, y);
+  } else {
+    drawHowPlatformIcons(x, y);
+  }
+  pop();
+}
+
+function drawHowMemoryIcon(x, y) {
+  push();
+  translate(x, y);
+  noStroke();
+  drawingContext.shadowBlur = 18;
+  drawingContext.shadowColor = color(255, 220, 70, 220);
+  fill(255, 223, 55);
+  beginShape();
+  vertex(0, -44); vertex(12, -12); vertex(44, 0); vertex(12, 12);
+  vertex(0, 44); vertex(-12, 12); vertex(-44, 0); vertex(-12, -12);
+  endShape(CLOSE);
+  fill(102, 210, 235);
+  ellipse(0, 0, 14, 14);
+  drawingContext.shadowBlur = 0;
+  pop();
+}
+
+function drawHowPlatformIcons(x, y) {
+  push();
+  translate(x, y);
+  noStroke();
+  fill(235, 242, 255);
+  ellipse(-28, 8, 86, 26);
+  fill(56, 70, 92);
+  ellipse(42, 5, 56, 18);
+  triangle(28, 5, 8, -8, 20, 12);
+  triangle(56, 5, 76, -8, 64, 12);
+  fill(102, 76, 68);
+  rect(-4, 24, 56, 18, 4);
+  fill(235, 208, 136);
+  rect(4, 18, 40, 10, 3);
+  pop();
+}
+
+function drawHowItemIcon(type, x, y, s) {
+  push();
+  translate(x, y);
+  scale(s);
+  noStroke();
+
+  if (type === "memory") {
+    fill(255, 223, 55);
+    beginShape();
+    vertex(0, -34); vertex(10, -10); vertex(34, 0); vertex(10, 10);
+    vertex(0, 34); vertex(-10, 10); vertex(-34, 0); vertex(-10, -10);
+    endShape(CLOSE);
+    fill(102, 210, 235); ellipse(0, 0, 11, 11);
+  } else if (type === "cloud") {
+    fill(255);
+    ellipse(-20, 5, 34, 22); ellipse(0, 0, 40, 28); ellipse(22, 6, 30, 20);
+    fill(225, 236, 252, 190); ellipse(2, 14, 76, 12);
+  } else if (type === "cloudboost") {
+    fill(255, 255, 248);
+    ellipse(-20, 5, 34, 22); ellipse(0, 0, 40, 28); ellipse(22, 6, 30, 20);
+    fill(250, 223, 116, 195); ellipse(2, 14, 76, 12);
+  } else if (type === "heaven") {
+    fill(238, 224, 180); rect(-34, -6, 68, 16, 5); fill(255, 248, 222); rect(-28, -12, 56, 8, 4);
+  } else if (type === "bird") {
+    fill(74, 84, 104); ellipse(0, 0, 28, 12); triangle(-6, 0, -34, -12, -16, 7); triangle(6, 0, 34, -12, 16, 7);
+  } else if (type === "sign") {
+    fill(92, 64, 52); rect(-4, 10, 8, 26, 3); fill(100, 68, 126); rect(0, -6, 58, 28, 6); fill(255, 232, 180); rect(0, -6, 42, 12, 4);
+  } else if (type === "plane") {
+    fill(98, 106, 122); ellipse(0, 0, 66, 14); triangle(-6, 0, -34, -18, -16, 7); triangle(10, 0, 40, -14, 18, 7); rect(-24, -3, 18, 6, 3);
+  } else if (type === "storm") {
+    fill(18, 22, 30); ellipse(-10, 6, 28, 18); ellipse(6, 0, 32, 24); ellipse(24, 7, 22, 16); fill(70, 78, 98, 190); ellipse(4, -8, 12, 5);
+  } else if (type === "feather") {
+    fill(15, 18, 26); beginShape(); vertex(0, -24); bezierVertex(12, -8, 12, 14, 0, 24); bezierVertex(-8, 12, -10, -8, 0, -24); endShape(CLOSE); stroke(118, 126, 152); strokeWeight(2); line(0, -22, 0, 22); line(0, -8, 8, -14); line(0, 4, -8, 0); noStroke();
+  } else if (type === "rain") {
+    fill(18, 28, 45); beginShape(); vertex(0, -24); bezierVertex(13, -8, 12, 10, 0, 24); bezierVertex(-12, 10, -13, -8, 0, -24); endShape(CLOSE); fill(110, 150, 200, 120); ellipse(5, -5, 6, 14);
+  } else if (type === "shadow") {
+    fill(18, 20, 30); ellipse(-10, 5, 24, 16); ellipse(8, 0, 34, 22); fill(100, 110, 140, 110); ellipse(8, -8, 10, 4);
+  } else if (type === "can") {
+    fill(188, 194, 204); rect(0, 0, 24, 34, 4); fill(104, 120, 148); rect(0, 0, 20, 10, 3); fill(226, 230, 236); rect(0, -16, 22, 5, 2);
+  } else if (type === "bottle") {
+    fill(42, 104, 80); rect(0, -16, 12, 10, 2); rect(0, 4, 24, 34, 5); fill(180, 236, 210, 100); rect(6, 2, 5, 18, 2);
+  } else if (type === "wire") {
+    stroke(20, 22, 28); strokeWeight(4); line(-24, -12, 24, 12); line(-22, 12, 22, -12); noStroke(); fill(24, 26, 34); rect(0, 0, 12, 12, 3);
+  } else if (type === "bag") {
+    fill(236, 241, 246, 210); rect(0, 0, 30, 24, 6); stroke(198, 208, 224, 170); strokeWeight(3); noFill(); arc(-6, -12, 10, 12, PI, TWO_PI); arc(6, -12, 10, 12, PI, TWO_PI); noStroke();
+  } else if (type === "gust") {
+    noFill(); stroke(196, 228, 255); strokeWeight(4); arc(-6, 5, 28, 24, HALF_PI, TWO_PI); arc(9, -4, 36, 28, PI, TWO_PI + HALF_PI); noStroke();
+  }
+  pop();
+}
+
 
 function makeCut(x, y, w, h, text) {
   return { x, y, w, h, text };
@@ -835,6 +1217,7 @@ function loadAlbumData() {
       if (settings.storyTextScale) storyTextScale = settings.storyTextScale;
       if (settings.defaultAutoStory !== undefined) defaultAutoStory = settings.defaultAutoStory;
       if (settings.highContrastText !== undefined) highContrastText = settings.highContrastText;
+      if (settings.bgmVolume !== undefined && typeof setBgmVolume === 'function') setBgmVolume(settings.bgmVolume);
     }
   } catch (e) {
     console.log('album/settings load fail');
@@ -847,7 +1230,8 @@ function saveSettingsData() {
     localStorage.setItem('cat_descent_settings', JSON.stringify({
       storyTextScale: storyTextScale,
       defaultAutoStory: defaultAutoStory,
-      highContrastText: highContrastText
+      highContrastText: highContrastText,
+      bgmVolume: (typeof bgmVolume === 'number' ? bgmVolume : 0.42)
     }));
   } catch (e) {
     console.log('settings save fail');
@@ -875,9 +1259,9 @@ function drawSettingsScreen() {
 
 function drawSettingPanel() {
   let panelX = gameW / 2;
-  let panelY = 548;
-  let panelW = 780;
-  let panelH = 650;
+  let panelY = 600;
+  let panelW = 790;
+  let panelH = 820;
 
   fill(255, 247, 225, 178);
   stroke(255, 245, 220, 190);
@@ -886,38 +1270,72 @@ function drawSettingPanel() {
 
   noStroke();
   fill(65, 52, 80);
-  textSize(33);
-  text('글씨 크기', panelX, panelY - 235);
+  textSize(31);
+  text('글씨 크기', panelX, panelY - 320);
 
   fill(65, 52, 80, 188);
-  textSize(21);
-  text('스토리 대사와 게임 방법 글씨 크기를 조절해.', panelX, panelY - 198);
+  textSize(19);
+  text('스토리 대사와 게임 방법 글씨 크기를 조절해.', panelX, panelY - 286);
 
-  drawSettingChoice('보통', panelX - 220, panelY - 132, 150, 56, abs(storyTextScale - 1.0) < 0.01);
-  drawSettingChoice('크게', panelX, panelY - 132, 150, 56, abs(storyTextScale - 1.22) < 0.01);
-  drawSettingChoice('아주 크게', panelX + 220, panelY - 132, 180, 56, abs(storyTextScale - 1.42) < 0.01);
+  drawSettingChoice('보통', panelX - 220, panelY - 230, 150, 54, abs(storyTextScale - 1.0) < 0.01);
+  drawSettingChoice('크게', panelX, panelY - 230, 150, 54, abs(storyTextScale - 1.22) < 0.01);
+  drawSettingChoice('아주 크게', panelX + 220, panelY - 230, 180, 54, abs(storyTextScale - 1.42) < 0.01);
 
   fill(65, 52, 80);
-  textSize(33);
-  text('고대비 자막', panelX, panelY - 20);
+  textSize(31);
+  text('고대비 자막', panelX, panelY - 120);
 
   fill(65, 52, 80, 188);
-  textSize(21);
-  text('대사창을 더 진하게 만들어 글씨가 잘 보이게 해.', panelX, panelY + 18);
+  textSize(19);
+  text('대사창을 더 진하게 만들어 글씨가 잘 보이게 해.', panelX, panelY - 86);
 
-  drawSettingChoice('꺼짐', panelX - 95, panelY + 82, 150, 56, !highContrastText);
-  drawSettingChoice('켜짐', panelX + 95, panelY + 82, 150, 56, highContrastText);
+  drawSettingChoice('꺼짐', panelX - 95, panelY - 30, 150, 54, !highContrastText);
+  drawSettingChoice('켜짐', panelX + 95, panelY - 30, 150, 54, highContrastText);
 
   fill(65, 52, 80);
-  textSize(33);
-  text('스토리 자동 넘김', panelX, panelY + 188);
+  textSize(31);
+  text('스토리 자동 넘김', panelX, panelY + 80);
 
   fill(65, 52, 80, 188);
-  textSize(21);
-  text('새 스토리를 시작할 때 자동 넘김을 기본으로 켤지 정해.', panelX, panelY + 226);
+  textSize(19);
+  text('새 스토리를 시작할 때 자동 넘김을 기본으로 켤지 정해.', panelX, panelY + 114);
 
-  drawSettingChoice('꺼짐', panelX - 95, panelY + 292, 150, 56, !defaultAutoStory);
-  drawSettingChoice('켜짐', panelX + 95, panelY + 292, 150, 56, defaultAutoStory);
+  drawSettingChoice('꺼짐', panelX - 95, panelY + 170, 150, 54, !defaultAutoStory);
+  drawSettingChoice('켜짐', panelX + 95, panelY + 170, 150, 54, defaultAutoStory);
+
+  drawMainVolumeSetting(panelX, panelY + 302);
+}
+
+function drawMainVolumeSetting(x, y) {
+  push();
+  rectMode(CENTER);
+  textAlign(CENTER, CENTER);
+
+  noStroke();
+  fill(65, 52, 80);
+  textSize(31);
+  text('음악 소리', x, y - 70);
+
+  fill(65, 52, 80, 188);
+  textSize(19);
+  text('배경음악 크기를 조절해.', x, y - 36);
+
+  fill(255, 245, 225, 155);
+  stroke(255, 245, 220, 160);
+  strokeWeight(2);
+  rect(x, y + 24, 360, 64, 18);
+
+  let percent = typeof getBgmVolumePercent === 'function' ? getBgmVolumePercent() : 42;
+
+  noStroke();
+  fill(70, 55, 85);
+  textSize(24);
+  text(percent + '%', x, y + 25);
+
+  drawSettingChoice('-', x - 130, y + 24, 62, 48, false);
+  drawSettingChoice('+', x + 130, y + 24, 62, 48, false);
+
+  pop();
 }
 
 function drawSettingChoice(label, x, y, w, h, selected) {
@@ -947,60 +1365,74 @@ function drawSettingsBackButton() {
   fill(255, 245, 220, 145);
   stroke(255, 245, 220);
   strokeWeight(2);
-  rect(gameW / 2, 1165, 330, 68, 18);
+  rect(gameW / 2, 1280, 330, 68, 18);
 
   noStroke();
   fill(70, 55, 85);
   textSize(31);
-  text('돌아가기', gameW / 2, 1167);
+  text('돌아가기', gameW / 2, 1282);
 }
 
 function handleSettingsClick() {
-  let panelY = 548;
+  let panelY = 600;
 
-  if (isMouseOnRect(gameW / 2 - 220, panelY - 132, 150, 56)) {
+  if (isMouseOnRect(gameW / 2 - 220, panelY - 230, 150, 54)) {
     storyTextScale = 1.0;
     saveSettingsData();
     return;
   }
 
-  if (isMouseOnRect(gameW / 2, panelY - 132, 150, 56)) {
+  if (isMouseOnRect(gameW / 2, panelY - 230, 150, 54)) {
     storyTextScale = 1.22;
     saveSettingsData();
     return;
   }
 
-  if (isMouseOnRect(gameW / 2 + 220, panelY - 132, 180, 56)) {
+  if (isMouseOnRect(gameW / 2 + 220, panelY - 230, 180, 54)) {
     storyTextScale = 1.42;
     saveSettingsData();
     return;
   }
 
-  if (isMouseOnRect(gameW / 2 - 95, panelY + 82, 150, 56)) {
+  if (isMouseOnRect(gameW / 2 - 95, panelY - 30, 150, 54)) {
     highContrastText = false;
     saveSettingsData();
     return;
   }
 
-  if (isMouseOnRect(gameW / 2 + 95, panelY + 82, 150, 56)) {
+  if (isMouseOnRect(gameW / 2 + 95, panelY - 30, 150, 54)) {
     highContrastText = true;
     saveSettingsData();
     return;
   }
 
-  if (isMouseOnRect(gameW / 2 - 95, panelY + 292, 150, 56)) {
+  if (isMouseOnRect(gameW / 2 - 95, panelY + 170, 150, 54)) {
     defaultAutoStory = false;
     saveSettingsData();
     return;
   }
 
-  if (isMouseOnRect(gameW / 2 + 95, panelY + 292, 150, 56)) {
+  if (isMouseOnRect(gameW / 2 + 95, panelY + 170, 150, 54)) {
     defaultAutoStory = true;
     saveSettingsData();
     return;
   }
 
-  if (isMouseOnRect(gameW / 2, 1165, 330, 68)) {
+  if (isMouseOnRect(gameW / 2 - 130, panelY + 326, 62, 48)) {
+    if (typeof setBgmVolume === 'function') {
+      setBgmVolume((typeof bgmVolume === 'number' ? bgmVolume : 0.42) - 0.1);
+    }
+    return;
+  }
+
+  if (isMouseOnRect(gameW / 2 + 130, panelY + 326, 62, 48)) {
+    if (typeof setBgmVolume === 'function') {
+      setBgmVolume((typeof bgmVolume === 'number' ? bgmVolume : 0.42) + 0.1);
+    }
+    return;
+  }
+
+  if (isMouseOnRect(gameW / 2, 1280, 330, 68)) {
     currentScreen = 'title';
   }
 }
@@ -1189,47 +1621,255 @@ function advanceStory() {
 }
 
 function drawHeavenReadyScreen() {
-  background(20, 25, 35);
+  drawCoverImage(titleImg, 0, 0, gameW, gameH);
 
-  fill(255, 245, 230);
+  noStroke();
+  fill(0, 110);
+  rect(gameW / 2, gameH / 2, gameW, gameH);
+
   textFont("serif");
-  textSize(50);
-  text("천국 스테이지 시작", gameW / 2, gameH / 2 - 70);
+  textAlign(CENTER, CENTER);
 
-  textSize(26);
-  fill(255, 245, 230, 180);
-  text("이제 여기서 기억의 조각을 찾아야 해", gameW / 2, gameH / 2 + 5);
+  fill(255, 246, 230);
+  textSize(58);
+  text("천국 스테이지", gameW / 2, gameH / 2 - 70);
 
-  textSize(22);
-  fill(255, 245, 230, 130);
-  text("3분 안에 기억조각을 모으고 아래의 문까지 내려가야 해", gameW / 2, gameH / 2 + 60);
+  fill(255, 246, 230, 185);
+  textSize(24);
+  text("게임이 시작되면 화면 안에 설명서가 표시됩니다.", gameW / 2, gameH / 2 + 5);
 
   let left = max(1, ceil((105 - (frameCount - readyScreenEnterFrame)) / 60));
-  fill(255, 245, 230, 200);
-  textSize(24);
-  text(left + "초 후 자동 시작", gameW / 2, gameH / 2 + 125);
+  fill(255, 246, 230, 210);
+  textFont("Noto Sans KR, Pretendard, sans-serif");
+  textSize(20);
+  text(left + "초 후 시작", gameW / 2, gameH / 2 + 80);
+}
+
+function drawHeavenManualPanel() {
+  let panelX = gameW / 2;
+  let panelY = 705;
+  let panelW = 820;
+  let panelH = 860;
+
+  noStroke();
+  fill(255, 250, 232, 232);
+  rect(panelX, panelY, panelW, panelH, 34);
+
+  stroke(255, 255, 255, 150);
+  strokeWeight(2);
+  noFill();
+  rect(panelX, panelY, panelW - 16, panelH - 16, 30);
+
+  drawManualCard(315, 520, 315, 300, "먹어야 하는 것", "memory", [
+    "기억조각 / 별조각",
+    "18개를 모으면 천국문 조건 달성"
+  ]);
+
+  drawManualCard(705, 520, 315, 300, "피해야 하는 것", "danger", [
+    "먹구름: 위로 튕김",
+    "깃털: 하트 -1",
+    "검은비: 하트 -1 + 느려짐",
+    "그림자: 하트 -1 + 밀림"
+  ]);
+
+  drawManualWideCard(510, 920, 645, 270, "클리어 방법", [
+    "① 기억조각 18개 모으기",
+    "② 발판을 밟으며 아래로 내려가기",
+    "③ 기억이 충분할 때 지상문 통과하기"
+  ], [
+    "기억조각이 부족한 상태로 지상문에 닿으면 다른 엔딩으로 이어집니다.",
+    "먹구름은 막힌 벽이 아니라 고양이를 위로 튕겨 올리는 방해 발판입니다."
+  ]);
+
+  drawManualControlHint(510, 1165);
+}
+
+function drawManualCard(x, y, w, h, title, type, lines) {
+  push();
+  rectMode(CENTER);
+  textAlign(CENTER, CENTER);
+  textFont("Noto Sans KR, Pretendard, sans-serif");
+
+  fill(255, 255, 252, 246);
+  stroke(120, 106, 136, 55);
+  strokeWeight(2);
+  rect(x, y, w, h, 24);
+
+  noStroke();
+  fill(78, 64, 92);
+  textSize(26);
+  text(title, x, y - 105);
+
+  if (type === "memory") {
+    drawManualMemoryIcon(x, y - 40);
+  } else {
+    drawManualDangerIcons(x, y - 42);
+  }
+
+  fill(82, 70, 96);
+  textSize(18);
+  textLeading(30);
+  text(lines.join("\n"), x, y + 70);
+
+  pop();
+}
+
+function drawManualWideCard(x, y, w, h, title, mainLines, subLines) {
+  push();
+  rectMode(CENTER);
+  textAlign(CENTER, CENTER);
+  textFont("Noto Sans KR, Pretendard, sans-serif");
+
+  fill(255, 255, 252, 242);
+  stroke(120, 106, 136, 55);
+  strokeWeight(2);
+  rect(x, y, w, h, 24);
+
+  noStroke();
+  fill(78, 64, 92);
+  textSize(27);
+  text(title, x, y - 88);
+
+  fill(76, 64, 92);
+  textSize(19);
+  text(mainLines.join("     "), x, y - 20);
+
+  fill(112, 100, 122, 215);
+  textSize(15);
+  textLeading(27);
+  text(subLines.join("\n"), x, y + 58);
+
+  pop();
+}
+
+function drawManualControlHint(x, y) {
+  push();
+  rectMode(CENTER);
+  textAlign(CENTER, CENTER);
+  textFont("Noto Sans KR, Pretendard, sans-serif");
+
+  fill(72, 60, 90, 225);
+  noStroke();
+  rect(x, y, 650, 74, 22);
+
+  fill(255, 246, 230, 235);
+  textSize(16);
+  text("조작: 마우스 포인터 따라가기  ·  A/D 또는 ←/→ 이동  ·  발판 착지 시 자동 점프", x, y);
+
+  pop();
+}
+
+function drawManualMemoryIcon(x, y) {
+  push();
+  translate(x, y);
+  noStroke();
+  drawingContext.shadowBlur = 18;
+  drawingContext.shadowColor = color(255, 220, 80, 210);
+  fill(255, 224, 58);
+  beginShape();
+  vertex(0, -36);
+  vertex(10, -10);
+  vertex(36, 0);
+  vertex(10, 10);
+  vertex(0, 36);
+  vertex(-10, 10);
+  vertex(-36, 0);
+  vertex(-10, -10);
+  endShape(CLOSE);
+  fill(90, 205, 235);
+  ellipse(0, 0, 10, 10);
+  drawingContext.shadowBlur = 0;
+  pop();
+}
+
+function drawManualDangerIcons(x, y) {
+  push();
+  translate(x, y);
+  noStroke();
+
+  fill(18, 20, 30);
+  ellipse(-66, 8, 34, 22);
+  ellipse(-46, 0, 31, 31);
+  ellipse(-25, 9, 28, 19);
+  fill(60, 68, 88, 190);
+  ellipse(-47, -8, 12, 5);
+
+  stroke(18, 20, 30);
+  strokeWeight(6);
+  line(16, -34, 16, 22);
+  line(16, 22, 36, 22);
+  noStroke();
+
+  stroke(20, 22, 30);
+  strokeWeight(4);
+  line(74, -18, 112, 18);
+  line(112, -18, 74, 18);
+
+  pop();
 }
 
 function drawEarthReadyScreen() {
-  background(15, 18, 25);
+  drawCoverImage(titleImg, 0, 0, gameW, gameH);
 
-  fill(255, 245, 230);
+  noStroke();
+  fill(0, 115);
+  rect(gameW / 2, gameH / 2, gameW, gameH);
+
   textFont("serif");
-  textSize(50);
-  text("지상 스테이지 시작", gameW / 2, gameH / 2 - 70);
+  textAlign(CENTER, CENTER);
 
-  textSize(26);
-  fill(255, 245, 230, 180);
-  text("이제 고양이는 주인의 집을 찾아 지상으로 내려간다", gameW / 2, gameH / 2 + 5);
+  fill(255, 246, 230);
+  textSize(58);
+  text("지상 스테이지", gameW / 2, gameH / 2 - 70);
 
-  textSize(22);
-  fill(255, 245, 230, 130);
-  text("구름, 비행기, 비둘기, 간판을 밟으며 지상까지 내려가자", gameW / 2, gameH / 2 + 60);
+  fill(255, 246, 230, 185);
+  textSize(24);
+  text("게임이 시작되면 화면 안에 설명서가 표시됩니다.", gameW / 2, gameH / 2 + 5);
 
   let left = max(1, ceil((105 - (frameCount - readyScreenEnterFrame)) / 60));
-  fill(255, 245, 230, 200);
-  textSize(24);
-  text(left + "초 후 자동 시작", gameW / 2, gameH / 2 + 125);
+  fill(255, 246, 230, 210);
+  textFont("Noto Sans KR, Pretendard, sans-serif");
+  textSize(20);
+  text(left + "초 후 시작", gameW / 2, gameH / 2 + 80);
+}
+
+function drawEarthManualPanel() {
+  let panelX = gameW / 2;
+  let panelY = 725;
+  let panelW = 820;
+  let panelH = 800;
+
+  noStroke();
+  fill(255, 250, 232, 232);
+  rect(panelX, panelY, panelW, panelH, 34);
+
+  stroke(255, 255, 255, 150);
+  strokeWeight(2);
+  noFill();
+  rect(panelX, panelY, panelW - 16, panelH - 16, 30);
+
+  drawManualCard(315, 550, 315, 300, "밟고 내려갈 것", "memory", [
+    "구름 / 비둘기 / 작은 새",
+    "건물 구간부터 간판 발판 등장"
+  ]);
+
+  drawManualCard(705, 550, 315, 300, "피해야 하는 것", "danger", [
+    "캔: 하트 -1 + 느려짐",
+    "병: 하트 -2",
+    "전선: 하트 -1 + 밀림",
+    "비닐봉지: 하트 -1 + 위로 튕김"
+  ]);
+
+  drawManualWideCard(510, 950, 645, 245, "클리어 방법", [
+    "① 양옆 발판 이용",
+    "② 장애물 피하기",
+    "③ 지상까지 내려가기"
+  ], [
+    "비행기는 초반에만 나오며, 밟으면 위로 튕겨 시간이 늦어집니다.",
+    "건물 배경이 보이면 새와 간판 발판을 중심으로 내려가면 됩니다."
+  ]);
+
+  drawManualControlHint(510, 1175);
 }
 
 
@@ -1285,6 +1925,7 @@ function mousePressedStory() {
           startPrologue();
         } else if (b.name === "how") {
           currentScreen = "how";
+          howPage = 0;
         } else if (b.name === "album") {
           currentScreen = "album";
         } else if (b.name === "option") {
@@ -1327,17 +1968,7 @@ function mousePressedStory() {
       currentScreen = "title";
     }
   } else if (currentScreen === "how") {
-    let mx = screenToGameX(mouseX);
-    let my = screenToGameY(mouseY);
-
-    if (
-      mx > gameW / 2 - 165 &&
-      mx < gameW / 2 + 165 &&
-      my > 1300 - 35 &&
-      my < 1300 + 35
-    ) {
-      currentScreen = "title";
-    }
+    handleHowClick();
   } else if (currentScreen === "story") {
     for (let b of storyControlButtons) {
       if (isMouseOnRect(b.x, b.y, b.w, b.h)) {
@@ -1357,6 +1988,11 @@ function mousePressedStory() {
 }
 
 function keyPressedStory() {
+  if ((currentScreen === "heavenReady" || currentScreen === "earthReady") && keyCode === ENTER) {
+    readyScreenEnterFrame = -9999;
+    return;
+  }
+
   if (currentScreen === "title" && keyCode === ENTER) {
     startPrologue();
   }
@@ -1373,6 +2009,13 @@ function keyPressedStory() {
     }
   } else if (currentScreen === "how" && keyCode === ESCAPE) {
     currentScreen = "title";
+  }
+
+  if (currentScreen === "how" && keyCode === RIGHT_ARROW) {
+    howPage = 1;
+  }
+  if (currentScreen === "how" && keyCode === LEFT_ARROW) {
+    howPage = 0;
   }
 
   if (currentScreen === "story") {
